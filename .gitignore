@@ -4,3 +4,8 @@ dist
 *.log
 .vscode
 .context
+
+# vite/tsc build artifacts
+tsconfig*.tsbuildinfo
+vite.config.d.ts
+vite.config.js
