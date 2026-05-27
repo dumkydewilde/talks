@@ -8,6 +8,17 @@ import { useState, useEffect, useCallback, Fragment } from "react";
 import { useSQLQuery } from "../../shared/md-sdk";
 import * as React from "react";
 import { CloudOutline, Oval, Badge, Bean, Pebble, Drop } from "../../shared/shape-primitives";
+import { QrCard, CodeBlock, DuckIcon } from "./components";
+import {
+  DECK_META, QR_FOLLOW, QR_MCP_MEMORY,
+  TRANSITION_WHERE, TRAP_SETUP, TRAP_CATCH, TRAP_REVEAL, TRANSITION_WHY,
+  LEVELS, LOOP_ANIM, LOOP_CODE, TRANSITION_CONTEXT, CONTEXT_STACK, COMMENT_ON,
+  BENCHMARK, CONTEXT_BEATS, MANUAL_DRIFT, EVAL_LOOP, TRANSITION_SKILLS,
+  MCP_MEMORY, TRANSITION_WAIT, DBT_SPLIT, DBT_STAGGER, CONTEXT_LAYER,
+  ANSWER_WORKFLOW, ROLE_CHANGE, ACTIONS, ABOUT, PROPOSITIONS, DIVES, RESOURCES, CTA,
+} from "./content";
+
+const SLIDE_URL = DECK_META.slideUrl;
 
 const TOKENS = {
   color: {
@@ -81,7 +92,39 @@ html, body, #root {
   -webkit-font-smoothing: antialiased;
 }
 
-.deck { position: relative; width: 100%; height: 100%; overflow: hidden; cursor: pointer; }
+.deck { position: relative; width: 100%; height: 100%; overflow: hidden; }
+.nav-zone {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: clamp(48px, 6vw, 96px);
+  z-index: 8;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  opacity: 0;
+  transition: opacity 0.18s ease, background 0.18s ease;
+}
+.nav-zone:hover,
+.nav-zone:focus-visible {
+  opacity: 1;
+  background: linear-gradient(90deg, rgba(56,56,56,0.06), rgba(56,56,56,0));
+  outline: none;
+}
+.nav-zone--right { right: 0; }
+.nav-zone--right:hover,
+.nav-zone--right:focus-visible {
+  background: linear-gradient(270deg, rgba(56,56,56,0.06), rgba(56,56,56,0));
+}
+.nav-zone--left { left: 0; }
+.nav-zone:disabled { cursor: default; opacity: 0; pointer-events: none; }
+.slide--ink ~ .nav-zone:hover { background: linear-gradient(90deg, rgba(244,239,234,0.08), rgba(244,239,234,0)); color: var(--sand); }
+.slide--ink ~ .nav-zone--right:hover { background: linear-gradient(270deg, rgba(244,239,234,0.08), rgba(244,239,234,0)); }
 .slide {
   position: absolute;
   inset: 0;
@@ -103,6 +146,8 @@ html, body, #root {
 @keyframes a-fade-left { from { opacity: 0; transform: translateX(-12px); } to { opacity: 1; transform: translateX(0); } }
 @keyframes a-pop       { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }
 @keyframes a-grow-x    { from { opacity: 0; transform: scaleX(0); transform-origin: left center; } to { opacity: 1; transform: scaleX(1); transform-origin: left center; } }
+@keyframes a-loop-dash { to { stroke-dashoffset: -28; } }
+@keyframes a-loop-dot  { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.18); } }
 
 /* Illustration animations. Bound to stable class hooks inside duck SVGs.
    See skills/design/motherduck-design-illustration/references/animation-patterns.md */
@@ -143,6 +188,28 @@ html, body, #root {
 
 .progress { position: absolute; bottom: 0; left: 0; height: 3px; background: var(--sky); transition: width 0.4s ease; z-index: 10; }
 .slide-counter { position: absolute; bottom: 16px; right: 24px; font-family: var(--aeonik); font-size: 13px; letter-spacing: 0.16em; color: var(--muted); z-index: 10; }
+.fullscreen-toggle {
+  position: absolute;
+  bottom: 12px;
+  right: 84px;
+  z-index: 11;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: rgba(244, 239, 234, 0.85);
+  color: var(--ink);
+  border: 1.5px solid var(--ink);
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 0;
+  opacity: 0.55;
+  transition: opacity 0.2s ease, transform 0.15s ease, background 0.2s ease;
+}
+.fullscreen-toggle:hover { opacity: 1; transform: translateY(-1px); }
+.slide--ink ~ .fullscreen-toggle,
+.slide.active.slide--ink ~ .fullscreen-toggle { background: rgba(56, 56, 56, 0.65); color: var(--sand); border-color: var(--sand); }
 .deck-badge { position: absolute; top: 20px; right: 24px; width: 28px; height: 20px; opacity: 0.65; z-index: 5; pointer-events: none; }
 .deck-badge svg { width: 100%; height: 100%; display: block; }
 
@@ -191,6 +258,105 @@ html, body, #root {
 .split-illustration-slot img { display: block; width: min(92%, 430px); height: auto; max-height: 68vh; }
 .split-illustration-slot--sidebar { height: 100%; padding: clamp(32px, 5vh, 72px) clamp(16px, 3vw, 48px); }
 .split-cta { font-family: var(--aeonik); font-size: clamp(18px, 2.2vw, 34px); letter-spacing: 0.08em; line-height: 1.25; text-transform: uppercase; color: var(--ink); }
+
+.title-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  opacity: 0.92;
+}
+.title-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(21, 31, 34, 0.66);
+}
+.qr-card {
+  background: var(--white);
+  border: 2px solid var(--ink);
+  box-shadow: -8px 8px 0 var(--ink);
+  color: var(--ink);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: clamp(16px, 1.6vw, 26px);
+  align-items: center;
+  text-align: center;
+}
+.qr-card img {
+  width: min(18vw, 220px);
+  aspect-ratio: 1 / 1;
+  display: block;
+  margin: 0 auto;
+}
+.qr-card--lg img { width: min(24vw, 320px); }
+
+/* Full-bleed image with side gradient for hero-like image slides */
+.image-stage {
+  position: relative;
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+.image-stage__img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+.image-stage__scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, var(--sand) 0%, var(--sand) 30%, rgba(244,239,234,0.92) 55%, rgba(244,239,234,0.55) 70%, rgba(244,239,234,0) 90%);
+  pointer-events: none;
+}
+.image-stage__scrim--ink {
+  background: linear-gradient(90deg, rgba(56,56,56,0.94) 0%, rgba(56,56,56,0.86) 35%, rgba(56,56,56,0.45) 60%, rgba(56,56,56,0) 85%);
+}
+.image-stage__content {
+  position: relative;
+  z-index: 1;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 4vw 5vw;
+  max-width: min(60vw, 920px);
+  gap: clamp(16px, 1.8vw, 28px);
+}
+
+/* Code highlight tweaks — keep monospace look but with subtle line cushion */
+.chrome-body--code { tab-size: 4; }
+.loop-wire {
+  stroke: var(--rule);
+  stroke-width: 4;
+  stroke-linecap: round;
+  fill: none;
+}
+.loop-wire--active {
+  stroke: var(--sun);
+  stroke-dasharray: 14 10;
+  animation: a-loop-dash 0.75s linear infinite;
+}
+.loop-dot {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  margin-left: -9px;
+  margin-top: -9px;
+  border-radius: 999px;
+  background: var(--sun);
+  border: 2px solid var(--ink);
+  box-shadow: 0 0 0 8px rgba(255, 222, 0, 0.24);
+  transition: left 0.55s ease, top 0.55s ease, background 0.2s ease;
+  animation: a-loop-dot 1s ease-in-out infinite;
+  pointer-events: none;
+}
 
 @media (max-width: 820px) {
   .split-frame { overflow-y: auto; }
@@ -808,46 +974,493 @@ function DuckIllustrationSlot({ children, className = "" }: { children?: React.R
   );
 }
 
+/* Layout adapted from analytics-agent-duckdb-workshop / AgenticLoop.tsx.
+   ViewBox is 960x580. All node positions are percentages; wire paths are
+   absolute SVG coordinates so endpoints align with node edges exactly. */
+
+type LoopPhase = {
+  label: string;
+  detail: string;
+  activeNode: "chat" | "llm" | "mcp" | "db";
+  activeWire: "w1" | "w2" | "w3" | "w4" | "w5" | "w6";
+  dot: { x: number; y: number };
+  payload?: { text: string; x: number; y: number };
+  status?: "err" | "ok";
+  highlightRow?: boolean;
+};
+
+const LOOP_PHASES: LoopPhase[] = [
+  {
+    label: "User prompt",
+    detail: "What's the average order value?",
+    activeNode: "chat",
+    activeWire: "w1",
+    dot: { x: 294, y: 118 },
+    payload: { text: '"average order value"', x: 230, y: 80 },
+  },
+  {
+    label: "LLM plans",
+    detail: "The model chooses a tool instead of guessing.",
+    activeNode: "llm",
+    activeWire: "w3",
+    dot: { x: 441, y: 280 },
+    payload: { text: "query_warehouse(sql)", x: 500, y: 250 },
+  },
+  {
+    label: "MCP executes",
+    detail: "Tools expose the warehouse and return exact errors.",
+    activeNode: "mcp",
+    activeWire: "w5",
+    dot: { x: 633, y: 424 },
+    payload: { text: "SELECT avg(order_total)", x: 555, y: 392 },
+  },
+  {
+    label: "Database responds",
+    detail: "Results, comments, and errors become new context.",
+    activeNode: "db",
+    activeWire: "w6",
+    dot: { x: 633, y: 444 },
+    payload: { text: "amounts are cents", x: 555, y: 460 },
+    status: "err",
+  },
+  {
+    label: "Loop corrects",
+    detail: "The agent revises the query with the new evidence.",
+    activeNode: "llm",
+    activeWire: "w4",
+    dot: { x: 501, y: 280 },
+    payload: { text: "divide by 100", x: 510, y: 240 },
+  },
+  {
+    label: "Answer ships",
+    detail: "A trace is left behind for evals and future context.",
+    activeNode: "chat",
+    activeWire: "w2",
+    dot: { x: 294, y: 144 },
+    payload: { text: '"€169.90"', x: 230, y: 160 },
+    status: "ok",
+    highlightRow: true,
+  },
+];
+
+const WIRE_PATHS: Record<LoopPhase["activeWire"], string> = {
+  w1: "M 213 118 L 376 118",
+  w2: "M 376 144 L 213 144",
+  w3: "M 441 172 L 441 390",
+  w4: "M 501 390 L 501 172",
+  w5: "M 570 424 L 696 424",
+  w6: "M 696 444 L 570 444",
+};
+
+function AgenticLoopVisual({ active }: { active: boolean }) {
+  const [phase, setPhase] = useState(0);
+  const current = LOOP_PHASES[phase];
+
+  useEffect(() => {
+    if (!active) {
+      setPhase(0);
+      return;
+    }
+    const id = window.setInterval(
+      () => setPhase((prev) => (prev + 1) % LOOP_PHASES.length),
+      1700,
+    );
+    return () => window.clearInterval(id);
+  }, [active]);
+
+  const isLit = (id: LoopPhase["activeNode"]) => current.activeNode === id;
+  const dotColor =
+    current.status === "err" ? "var(--watermelon)" :
+    current.status === "ok"  ? "var(--garden)" :
+    "var(--sun)";
+
+  return (
+    <div
+      style={{
+        position: "relative",
+        width: "100%",
+        height: "100%",
+        maxWidth: "min(100%, 1080px)",
+        maxHeight: "100%",
+        margin: "0 auto",
+        aspectRatio: "960 / 580",
+        background: "transparent",
+      }}
+    >
+      <svg
+        viewBox="0 0 960 580"
+        preserveAspectRatio="xMidYMid meet"
+        style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
+        aria-hidden="true"
+      >
+        <defs>
+          <marker id="loop-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="var(--rule)" />
+          </marker>
+        </defs>
+
+        {/* dashed Agentic Loop border */}
+        <rect
+          x="310" y="42" rx="22" ry="22" width="640" height="470"
+          fill="none" stroke="var(--muted)" strokeWidth="1.5"
+          strokeDasharray="8 5" strokeLinecap="round"
+        />
+        <text x="780" y="34" fontFamily="var(--aeonik)" fontSize="14" fontStyle="italic" fill="var(--muted)">
+          Agentic Loop
+        </text>
+
+        {/* Static wires */}
+        {(Object.keys(WIRE_PATHS) as LoopPhase["activeWire"][]).map((id) => (
+          <path
+            key={id}
+            d={WIRE_PATHS[id]}
+            fill="none"
+            stroke="var(--rule)"
+            strokeWidth="2"
+            strokeLinecap="round"
+            markerEnd="url(#loop-arrow)"
+          />
+        ))}
+
+        {/* Glow on active wire */}
+        {(Object.keys(WIRE_PATHS) as LoopPhase["activeWire"][]).map((id) => (
+          <path
+            key={`g-${id}`}
+            d={WIRE_PATHS[id]}
+            fill="none"
+            stroke={id === current.activeWire ? dotColor : "transparent"}
+            strokeWidth="4"
+            strokeLinecap="round"
+            strokeDasharray={id === current.activeWire ? "14 10" : undefined}
+            style={{
+              animation: id === current.activeWire ? "a-loop-dash 0.75s linear infinite" : undefined,
+              opacity: id === current.activeWire ? 1 : 0,
+              transition: "opacity 0.3s",
+            }}
+          />
+        ))}
+
+        {/* Animated dot */}
+        <circle
+          cx={current.dot.x}
+          cy={current.dot.y}
+          r="7"
+          fill={dotColor}
+          stroke="var(--ink)"
+          strokeWidth="1.5"
+          style={{
+            filter: `drop-shadow(0 0 8px ${dotColor})`,
+            transition: "cx 0.55s ease, cy 0.55s ease, fill 0.2s ease",
+          }}
+        />
+      </svg>
+
+      {/* Chat window (top-left) */}
+      <div
+        style={{
+          position: "absolute",
+          left: "3.96%", top: "9.48%",
+          width: "18.23%", height: "23.1%",
+          background: "var(--white)",
+          border: "2px solid var(--ink)",
+          borderRadius: 10,
+          overflow: "hidden",
+          transition: "box-shadow 0.3s, transform 0.3s",
+          transform: isLit("chat") ? "scale(1.03)" : "scale(1)",
+          boxShadow: isLit("chat") ? "-6px 6px 0 var(--ink)" : "-3px 3px 0 rgba(56,56,56,0.5)",
+        }}
+      >
+        <div
+          style={{
+            height: "26%",
+            background: "var(--sun)",
+            borderBottom: "2px solid var(--ink)",
+            display: "flex",
+            alignItems: "center",
+            padding: "0 10px",
+            gap: 5,
+          }}
+        >
+          <i style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--ink)", opacity: 0.25 }} />
+          <i style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--ink)", opacity: 0.25 }} />
+          <i style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--ink)", opacity: 0.25 }} />
+        </div>
+        <div style={{ padding: 8, display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{
+            fontSize: "0.85em",
+            padding: "4px 8px",
+            borderRadius: "8px 8px 2px 8px",
+            background: "var(--code-header)",
+            alignSelf: "flex-end",
+            fontFamily: "var(--aeonik)",
+            maxWidth: "85%",
+          }}>
+            avg order value?
+          </div>
+          {current.status === "ok" && (
+            <div style={{
+              fontSize: "0.85em",
+              padding: "4px 8px",
+              borderRadius: "8px 8px 8px 2px",
+              background: "var(--sun)",
+              alignSelf: "flex-start",
+              fontFamily: "var(--aeonik)",
+              maxWidth: "85%",
+            }}>
+              €169.90
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* LLM (yellow pill) */}
+      <div
+        style={{
+          position: "absolute",
+          left: "38.75%", top: "14.14%",
+          width: "20.63%", height: "15.17%",
+          background: "var(--sun)",
+          border: "2px solid var(--ink)",
+          borderRadius: 999,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          transition: "box-shadow 0.3s, transform 0.3s",
+          transform: isLit("llm") ? "scale(1.03)" : "scale(1)",
+          boxShadow: isLit("llm") ? "-6px 6px 0 var(--ink)" : "-3px 3px 0 rgba(56,56,56,0.4)",
+        }}
+      >
+        <div style={{ fontFamily: "var(--aeonik)", fontSize: "clamp(16px, 1.6vw, 28px)", letterSpacing: "-0.01em" }}>LLM</div>
+        <div style={{ fontFamily: "var(--inter)", fontSize: "clamp(11px, 0.95vw, 16px)", color: "var(--muted)", marginTop: 2 }}>
+          Reason + choose tools
+        </div>
+      </div>
+
+      {/* MCP (green octagon) */}
+      <div
+        style={{
+          position: "absolute",
+          left: "38.75%", top: "67.24%",
+          width: "20.63%", height: "15.17%",
+          transition: "transform 0.3s",
+          transform: isLit("mcp") ? "scale(1.03)" : "scale(1)",
+        }}
+      >
+        <div
+          style={{
+            width: "100%",
+            height: "100%",
+            background: "var(--garden)",
+            border: "2px solid var(--ink)",
+            clipPath: "polygon(12% 0%, 88% 0%, 100% 30%, 100% 70%, 88% 100%, 12% 100%, 0% 70%, 0% 30%)",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "var(--white)",
+          }}
+        >
+          <div style={{ fontFamily: "var(--aeonik)", fontSize: "clamp(16px, 1.5vw, 26px)", letterSpacing: "-0.01em" }}>MCP Server</div>
+          <div style={{ fontFamily: "var(--inter)", fontSize: "clamp(11px, 0.95vw, 16px)", color: "rgba(255,255,255,0.75)", marginTop: 2 }}>
+            Tool call
+          </div>
+        </div>
+      </div>
+
+      {/* DB table (bottom-right) */}
+      <div
+        style={{
+          position: "absolute",
+          left: "72.71%", top: "60%",
+          width: "23%",
+          transition: "transform 0.3s",
+          transform: isLit("db") ? "scale(1.03)" : "scale(1)",
+        }}
+      >
+        <div style={{ fontSize: "0.9em", color: "var(--muted)", marginBottom: 4, fontFamily: "var(--mono)" }}>
+          orders
+        </div>
+        <table
+          style={{
+            width: "100%",
+            fontSize: "0.85em",
+            borderCollapse: "separate",
+            borderSpacing: 0,
+            border: "1.5px solid var(--rule)",
+            borderRadius: 8,
+            overflow: "hidden",
+            background: "var(--white)",
+            fontFamily: "var(--inter)",
+          }}
+        >
+          <thead>
+            <tr>
+              {["order_id", "total", "ts"].map((h) => (
+                <th key={h} style={{
+                  background: "var(--code-header)",
+                  padding: "4px 8px",
+                  textAlign: "left",
+                  fontSize: "0.9em",
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                  letterSpacing: 0.5,
+                  color: "var(--muted)",
+                  fontFamily: "var(--mono)",
+                }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {[
+              ["A-001", "16990", "08:02"],
+              ["A-002", "8400", "08:14"],
+              ["A-003", "23110", "09:01"],
+              ["A-004", "12500", "09:33"],
+            ].map((row, i) => (
+              <tr
+                key={row[0]}
+                style={
+                  current.highlightRow && i === 0
+                    ? { background: "rgba(255,222,0,0.4)", fontWeight: 700, transition: "background 0.3s" }
+                    : { transition: "background 0.3s" }
+                }
+              >
+                {row.map((cell, j) => (
+                  <td key={j} style={{ padding: "3px 8px", borderTop: "1px solid var(--code-header)", fontFamily: j === 1 ? "var(--mono)" : "var(--inter)" }}>{cell}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Floating payload */}
+      {current.payload && (
+        <div
+          style={{
+            position: "absolute",
+            left: `${(current.payload.x / 960) * 100}%`,
+            top: `${(current.payload.y / 580) * 100}%`,
+            transform: "translate(-50%, -50%)",
+            fontSize: "0.85em",
+            lineHeight: 1.35,
+            color:
+              current.status === "err" ? "#B33A2E" :
+              current.status === "ok" ? "#0E7E6F" :
+              "var(--ink)",
+            background:
+              current.status === "err" ? "#FFF6F5" :
+              current.status === "ok" ? "#F0FDFB" :
+              "var(--white)",
+            border: `1.5px solid ${
+              current.status === "err" ? "var(--watermelon)" :
+              current.status === "ok" ? "var(--garden)" :
+              "var(--rule)"
+            }`,
+            borderRadius: 5,
+            padding: "3px 9px",
+            whiteSpace: "nowrap",
+            pointerEvents: "none",
+            boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+            fontFamily: "var(--mono)",
+            zIndex: 15,
+          }}
+        >
+          {current.payload.text}
+        </div>
+      )}
+
+      {/* Step indicator (bottom-left) */}
+      <div
+        style={{
+          position: "absolute",
+          left: "2%",
+          bottom: "0%",
+          maxWidth: "32%",
+          background: "var(--ink)",
+          color: "var(--sand)",
+          border: "2px solid var(--ink)",
+          padding: "clamp(10px, 0.9vw, 16px) clamp(12px, 1vw, 18px)",
+          display: "flex",
+          flexDirection: "column",
+          gap: 4,
+        }}
+      >
+        <div className="eyebrow" style={{ color: dotColor }}>
+          {String(phase + 1).padStart(2, "0")} / {current.label}
+        </div>
+        <div className="body-sm" style={{ color: "var(--sand)" }}>{current.detail}</div>
+      </div>
+    </div>
+  );
+}
+
+function ChromeTitlebar({ title }: { title: string }) {
+  return (
+    <div className="chrome-titlebar">
+      <div className="chrome-dots" aria-hidden="true">
+        <span className="chrome-dot chrome-dot--close" />
+        <span className="chrome-dot chrome-dot--min" />
+        <span className="chrome-dot chrome-dot--max" />
+      </div>
+      <div className="chrome-title">{title}</div>
+    </div>
+  );
+}
+
 // ── Infrastructure For Answers slides ──
 
 // S1 — Hero title (ink)
 function TitleSlide({ active }: { active: boolean }) {
   return (
-    <Slide variant="ink" active={active} scatter={false} badge={false}>
-      <HeroLeft gap={40}>
-        <div data-anim="pop" style={{ animationDelay: "0.1s" }}>
-          <DuckfeetLogo size={150} />
+    <Slide variant="ink" active={active} scatter={false} badge={false} flush>
+      <img className="title-image" src={`${import.meta.env.BASE_URL}infrastructure-duck-title.png`} alt="" />
+      <div className="title-scrim" />
+      <div style={{ position: "relative", zIndex: 1, height: "100%", display: "grid", gridTemplateColumns: "1.7fr 1fr", alignItems: "center", gap: "4vw", padding: "5vw 6vw" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "2vw" }}>
+          <div className="eyebrow eyebrow--sky" data-anim="fade-left" style={{ animationDelay: "0.25s" }}>
+            {DECK_META.author} · {DECK_META.event} · {DECK_META.date}
+          </div>
+          <div className="headline-xxl" data-anim="fade-up" style={{ animationDelay: "0.45s", color: "var(--sand)", textShadow: "0 3px 0 rgba(0,0,0,0.28)" }}>
+            Infrastructure for<br />
+            <span style={{ color: "var(--sky)" }}>answers.</span>
+          </div>
+          <div className="body-lg" data-anim="fade-up" style={{ animationDelay: "0.75s", color: "var(--sand)", maxWidth: "42ch" }}>
+            {DECK_META.subtitle}
+          </div>
         </div>
-        <div className="eyebrow eyebrow--sky" data-anim="fade-left" style={{ animationDelay: "0.25s" }}>
-          A talk by Dumky de Wilde · Amsterdam Analytics Engineering Meetup · 27 May 2026
+        <div data-anim="pop" style={{ animationDelay: "0.65s", justifySelf: "center" }}>
+          <QrCard src={QR_FOLLOW.src} label={QR_FOLLOW.label} url={QR_FOLLOW.url} />
         </div>
-        <div className="headline-xxl" data-anim="fade-up" style={{ animationDelay: "0.45s", color: "var(--sand)" }}>
-          Infrastructure for<br />
-          <span style={{ color: "var(--sky)" }}>answers.</span>
-        </div>
-        <div className="body-lg" data-anim="fade-up" style={{ animationDelay: "0.75s", color: "var(--muted-dark)" }}>
-          Engineering an analytics team for the agent era.
-        </div>
-      </HeroLeft>
+      </div>
     </Slide>
   );
 }
 
-// S2 — Section transition: where we are
+// S2 — Section transition: where we are (full-bleed image + sand gradient)
 function TransitionWhereWeAre({ active }: { active: boolean }) {
   return (
-    <Slide variant="sand" active={active}>
-      <HeroLeft gap={28}>
-        <div className="eyebrow" data-anim="fade-left" style={{ animationDelay: "0.15s" }}>Where we are</div>
-        <div className="headline-xl" data-anim="fade-up" style={{ animationDelay: "0.35s", maxWidth: "22ch" }}>
-          Every analyst, every PM, every CEO<br />
-          <span style={{ color: "var(--sky)" }}>is asking an LLM for SQL.</span>
+    <Slide variant="sand" active={active} scatter={false} flush>
+      <div className="image-stage">
+        <img
+          className="image-stage__img"
+          src={`${import.meta.env.BASE_URL}${TRANSITION_WHERE.image}`}
+          alt={TRANSITION_WHERE.imageAlt}
+        />
+        <div className="image-stage__scrim" />
+        <div className="image-stage__content">
+          <div className="eyebrow" data-anim="fade-left" style={{ animationDelay: "0.15s" }}>{TRANSITION_WHERE.eyebrow}</div>
+          <div className="headline-lg" data-anim="fade-up" style={{ animationDelay: "0.35s", maxWidth: "22ch" }}>
+            {TRANSITION_WHERE.headlineLines[0]}<br />
+            <span style={{ color: "var(--sky)" }}>{TRANSITION_WHERE.headlineLines[1]}</span>
+          </div>
+          <AccentRule />
+          <div className="body-md" data-anim="fade-up" style={{ animationDelay: "0.95s", color: "var(--muted-dark)", maxWidth: "44ch" }}>
+            {TRANSITION_WHERE.body}
+          </div>
         </div>
-        <AccentRule />
-        <div className="body-md" data-anim="fade-up" style={{ animationDelay: "0.95s", color: "var(--muted-dark)", maxWidth: "52ch" }}>
-          The interface to data is no longer the dashboard.
-        </div>
-      </HeroLeft>
+      </div>
     </Slide>
   );
 }
@@ -857,108 +1470,116 @@ function TrapSetupSlide({ active }: { active: boolean }) {
   return (
     <Slide variant="sand" active={active}>
       <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", gap: "2.5vw" }}>
-        <div className="headline-lg" data-anim="fade-up" style={{ animationDelay: "0.2s" }}>
-          "What's the average<br />order value?"
+        <div className="headline-lg" data-anim="fade-up" style={{ animationDelay: "0.2s", whiteSpace: "pre-line" }}>
+          {TRAP_SETUP.question}
         </div>
         <div className="chrome" data-anim="fade-up" style={{ animationDelay: "0.55s", maxWidth: "82%" }}>
-          <div className="chrome-titlebar">
-            <div className="chrome-dots" aria-hidden="true">
-              <span className="chrome-dot chrome-dot--close" />
-              <span className="chrome-dot chrome-dot--min" />
-              <span className="chrome-dot chrome-dot--max" />
-            </div>
-            <div className="chrome-title">agent.log</div>
-          </div>
-          <div className="chrome-body chrome-body--code">{`> User:   What's the average order value?
-
-> Agent:  SELECT avg(order_total) FROM raw_orders;
-
-> Result: 16,990.42`}</div>
+          <ChromeTitlebar title={TRAP_SETUP.filename} />
+          <CodeBlock language="log" code={TRAP_SETUP.code} />
         </div>
         <div className="eyebrow" data-anim="fade-up" style={{ animationDelay: "0.95s", color: "var(--watermelon)", maxWidth: "60ch" }}>
-          → raw_orders stores amounts in cents, not euros.
+          {TRAP_SETUP.caption}
         </div>
       </div>
     </Slide>
   );
 }
 
-// S4 — Trap reveal big stat (ink, watermelon rule)
+// S4 — Trap catch: where the 169 comes from
+function TrapCatchSlide({ active }: { active: boolean }) {
+  return (
+    <Slide variant="sand" active={active}>
+      <div style={{ flex: 1, display: "grid", gridTemplateColumns: "0.86fr 1.14fr", gap: "4vw", alignItems: "center" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "2vw" }}>
+          <div className="eyebrow eyebrow--watermelon" data-anim="fade-left" style={{ animationDelay: "0.15s" }}>
+            {TRAP_CATCH.eyebrow}
+          </div>
+          <div className="headline-lg" data-anim="fade-up" style={{ animationDelay: "0.35s", maxWidth: "13ch", whiteSpace: "pre-line" }}>
+            {TRAP_CATCH.headline}
+          </div>
+          <div className="body-md" data-anim="fade-up" style={{ animationDelay: "0.65s", color: "var(--muted-dark)", maxWidth: "35ch" }}>
+            {TRAP_CATCH.body}
+          </div>
+        </div>
+        <div className="chrome" data-anim="fade-up" style={{ animationDelay: "0.55s" }}>
+          <ChromeTitlebar title={TRAP_CATCH.filename} />
+          <CodeBlock language="sql" code={TRAP_CATCH.code} />
+          <div style={{ padding: "1.4vw 1.8vw", borderTop: "2px solid var(--ink)", background: "var(--sun)", display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "1.5vw" }}>
+            <div className="eyebrow" style={{ color: "var(--ink)" }}>{TRAP_CATCH.conversionLabel}</div>
+            <div style={{ fontFamily: "var(--aeonik)", fontSize: "clamp(20px, 2.1vw, 38px)", lineHeight: 1.05, color: "var(--ink)", whiteSpace: "nowrap" }}>
+              {TRAP_CATCH.conversion}
+            </div>
+          </div>
+        </div>
+      </div>
+    </Slide>
+  );
+}
+
+// S5 — Trap reveal big stat (ink, watermelon rule)
 function TrapRevealSlide({ active }: { active: boolean }) {
   return (
     <Slide variant="ink" active={active}>
       <HeroCenter gap={28}>
         <div className="eyebrow" data-anim="fade-left" style={{ animationDelay: "0.15s", color: "var(--muted-dark)" }}>
-          Actual answer
+          {TRAP_REVEAL.eyebrow}
         </div>
-        <div
-          className="bigstat"
-          data-anim="pop"
-          style={{ animationDelay: "0.4s", color: "var(--sky)" }}
-        >
-          €169.90
+        <div className="bigstat" data-anim="pop" style={{ animationDelay: "0.4s", color: "var(--sky)" }}>
+          {TRAP_REVEAL.bigstat}
         </div>
         <div className="body-lg" data-anim="fade-up" style={{ animationDelay: "0.85s", color: "var(--muted-dark)", textAlign: "center" }}>
-          vs €16,990.42 the agent told you.
+          {TRAP_REVEAL.body}
         </div>
         <div data-anim="grow-x" style={{ animationDelay: "1.1s", height: 4, width: "clamp(120px, 14vw, 240px)", background: "var(--watermelon)", margin: "8px auto 0" }} />
-        <div className="headline-md" data-anim="fade-up" style={{ animationDelay: "1.35s", color: "var(--sand)", textAlign: "center", maxWidth: "26ch", textTransform: "none", fontFamily: "var(--inter)", fontWeight: 500 }}>
-          100× off.<br />One column away from the truth.
+        <div className="headline-md" data-anim="fade-up" style={{ animationDelay: "1.35s", color: "var(--sand)", textAlign: "center", maxWidth: "26ch", textTransform: "none", fontFamily: "var(--inter)", fontWeight: 500, whiteSpace: "pre-line" }}>
+          {TRAP_REVEAL.tagline}
         </div>
       </HeroCenter>
     </Slide>
   );
 }
 
-// S5 — Section transition: why?
+function TransitionHeadline({ eyebrow, lines, highlightLast }: { eyebrow: string; lines: readonly string[]; highlightLast?: boolean }) {
+  const last = lines.length - 1;
+  return (
+    <HeroLeft gap={28}>
+      <div className="eyebrow" data-anim="fade-left" style={{ animationDelay: "0.15s" }}>{eyebrow}</div>
+      <div className="headline-xl" data-anim="fade-up" style={{ animationDelay: "0.35s", maxWidth: "26ch" }}>
+        {lines.map((line, i) => (
+          <React.Fragment key={i}>
+            {highlightLast && i === last ? (
+              <span style={{ color: "var(--sky)" }}>{line}</span>
+            ) : (
+              line
+            )}
+            {i < last && <br />}
+          </React.Fragment>
+        ))}
+      </div>
+      <AccentRule />
+    </HeroLeft>
+  );
+}
+
+// S6 — Section transition: why?
 function TransitionWhy({ active }: { active: boolean }) {
   return (
     <Slide variant="sand" active={active}>
-      <HeroLeft gap={28}>
-        <div className="eyebrow" data-anim="fade-left" style={{ animationDelay: "0.15s" }}>Why?</div>
-        <div className="headline-xl" data-anim="fade-up" style={{ animationDelay: "0.35s", maxWidth: "22ch" }}>
-          The loop isn't broken.<br />
-          <span style={{ color: "var(--sky)" }}>The data is.</span>
-        </div>
-        <AccentRule />
-      </HeroLeft>
+      <TransitionHeadline eyebrow={TRANSITION_WHY.eyebrow} lines={TRANSITION_WHY.headlineLines} highlightLast />
     </Slide>
   );
 }
 
-// S6 — Three levels card row with duck PNGs
+// S7 — Three levels card row with design-library duck SVGs
 function LevelsCardRow({ active }: { active: boolean }) {
-  const cards = [
-    {
-      num: "01",
-      img: `${import.meta.env.BASE_URL}instance_size_yellow_duck_pulse_stethoscope.png`,
-      name: "Copy-paste",
-      sub: "Pulse",
-      desc: "You are the loop. Paste schema, ask, copy SQL back, fix the errors yourself.",
-    },
-    {
-      num: "02",
-      img: `${import.meta.env.BASE_URL}instance_size_yellow_duck_standard.png`,
-      name: "Agentic clients",
-      sub: "Standard",
-      desc: "Claude Code, opencode, Cursor. The loop is built in. Tool calls go directly to your shell.",
-    },
-    {
-      num: "03",
-      img: `${import.meta.env.BASE_URL}instance_size_yellow_duck_jumbo.png`,
-      name: "Build the loop",
-      sub: "Jumbo",
-      desc: "~14 lines of Python. Yours, auditable. Swap any model, log every tool call.",
-    },
-  ];
   return (
     <Slide variant="sand" active={active}>
       <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", gap: "3vw" }}>
         <div className="headline-lg" data-anim="fade-up" style={{ animationDelay: "0.2s" }}>
-          Three levels of agentic SQL.
+          {LEVELS.headline}
         </div>
         <div className="stagger-cards" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "2.5vw", alignItems: "stretch" }}>
-          {cards.map((card) => (
+          {LEVELS.cards.map((card) => (
             <div
               key={card.num}
               style={{
@@ -972,12 +1593,36 @@ function LevelsCardRow({ active }: { active: boolean }) {
               }}
             >
               <div style={{ fontFamily: "var(--aeonik)", fontSize: "1.4vw", color: "var(--sky)" }}>{card.num}</div>
-              <img src={card.img} alt={card.sub} style={{ width: "100%", height: "11vw", objectFit: "contain", alignSelf: "center" }} />
+              <img src={`${import.meta.env.BASE_URL}${card.img}`} alt={card.sub} style={{ width: "100%", height: "11vw", objectFit: "contain", objectPosition: "center", alignSelf: "center" }} />
               <div style={{ fontFamily: "var(--aeonik)", fontSize: "1.8vw", textTransform: "uppercase", letterSpacing: "-0.02em", lineHeight: 1.05 }}>{card.name}</div>
               <div className="eyebrow" style={{ color: "var(--muted)" }}>{card.sub}</div>
               <div className="body-sm" style={{ color: "var(--ink)" }}>{card.desc}</div>
             </div>
           ))}
+        </div>
+      </div>
+    </Slide>
+  );
+}
+
+// S7 — Animated loop diagram (full-width: text above, loop below)
+function AgenticLoopAnimationSlide({ active }: { active: boolean }) {
+  return (
+    <Slide variant="sand" active={active} scatter={false}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", gap: "1.4vw", minHeight: 0 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "3vw", alignItems: "baseline" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.6vw" }}>
+            <div className="eyebrow" data-anim="fade-left" style={{ animationDelay: "0.15s" }}>{LOOP_ANIM.eyebrow}</div>
+            <div className="headline-md" data-anim="fade-up" style={{ animationDelay: "0.35s", maxWidth: "16ch" }}>
+              {LOOP_ANIM.headline}
+            </div>
+          </div>
+          <div className="body-md" data-anim="fade-up" style={{ animationDelay: "0.65s", color: "var(--muted-dark)", maxWidth: "56ch" }}>
+            {LOOP_ANIM.body}
+          </div>
+        </div>
+        <div data-anim="fade-up" style={{ animationDelay: "0.55s", width: "100%", flex: 1, minHeight: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <AgenticLoopVisual active={active} />
         </div>
       </div>
     </Slide>
@@ -990,36 +1635,14 @@ function LoopCodeSlide({ active }: { active: boolean }) {
     <Slide variant="sand" active={active}>
       <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", gap: "2.5vw" }}>
         <div className="headline-lg" data-anim="fade-up" style={{ animationDelay: "0.2s" }}>
-          The loop is a while loop.
+          {LOOP_CODE.headline}
         </div>
         <div className="chrome" data-anim="fade-up" style={{ animationDelay: "0.55s", maxWidth: "84%" }}>
-          <div className="chrome-titlebar">
-            <div className="chrome-dots" aria-hidden="true">
-              <span className="chrome-dot chrome-dot--close" />
-              <span className="chrome-dot chrome-dot--min" />
-              <span className="chrome-dot chrome-dot--max" />
-            </div>
-            <div className="chrome-title">agent_loop.py</div>
-          </div>
-          <div className="chrome-body chrome-body--code">{`def ask(question):
-    messages = [{"role": "user", "content": question}]
-    while True:
-        resp = client.chat.completions.create(
-            model=MODEL, tools=tools, messages=messages,
-        )
-        choice = resp.choices[0]
-        messages.append(choice.message)
-        if choice.finish_reason != "tool_calls":
-            return choice.message.content
-        for call in choice.message.tool_calls:
-            args = json.loads(call.function.arguments)
-            result = run_tool(call.function.name, args)
-            messages.append({"role": "tool",
-                             "tool_call_id": call.id,
-                             "content": result})`}</div>
+          <ChromeTitlebar title={LOOP_CODE.filename} />
+          <CodeBlock language="python" code={LOOP_CODE.code} />
         </div>
         <div className="eyebrow" data-anim="fade-up" style={{ animationDelay: "0.95s", color: "var(--sky)" }}>
-          → 14 lines. Nothing magic.
+          → Tool calls, trace logs, and model swaps are infrastructure choices.
         </div>
       </div>
     </Slide>
@@ -1030,14 +1653,7 @@ function LoopCodeSlide({ active }: { active: boolean }) {
 function TransitionContextWasIt({ active }: { active: boolean }) {
   return (
     <Slide variant="sand" active={active}>
-      <HeroLeft gap={28}>
-        <div className="eyebrow" data-anim="fade-left" style={{ animationDelay: "0.15s" }}>But</div>
-        <div className="headline-xl" data-anim="fade-up" style={{ animationDelay: "0.35s", maxWidth: "22ch" }}>
-          The loop wasn't the problem.<br />
-          <span style={{ color: "var(--sky)" }}>The context was.</span>
-        </div>
-        <AccentRule />
-      </HeroLeft>
+      <TransitionHeadline eyebrow={TRANSITION_CONTEXT.eyebrow} lines={TRANSITION_CONTEXT.headlineLines} highlightLast />
     </Slide>
   );
 }
@@ -1048,27 +1664,16 @@ function TwoLayersContextSlide({ active }: { active: boolean }) {
     <Slide variant="sand" active={active}>
       <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", gap: "3vw" }}>
         <div className="headline-lg" data-anim="fade-up" style={{ animationDelay: "0.2s" }}>
-          Two layers of context.
+          {CONTEXT_STACK.headline}
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4vw", alignItems: "start" }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: "1.2vw" }}>
-            <div className="eyebrow" data-anim="fade-left" style={{ animationDelay: "0.45s", color: "var(--sky)" }}>Skill file</div>
-            <div className="headline-md" data-anim="fade-up" style={{ animationDelay: "0.65s", maxWidth: "18ch", textTransform: "none", fontFamily: "var(--inter)", fontWeight: 500 }}>
-              Markdown → system prompt.
+        <div className="stagger-cards" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "1.8vw" }}>
+          {CONTEXT_STACK.layers.map((layer) => (
+            <div key={layer.label} style={{ background: "var(--white)", border: "2px solid var(--ink)", boxShadow: "-7px 7px 0 var(--ink)", padding: "1.35vw", minHeight: "15vw", display: "flex", flexDirection: "column", gap: "1vw" }}>
+              <div style={{ width: 48, height: 14, background: layer.color, border: "2px solid var(--ink)" }} />
+              <div style={{ fontFamily: "var(--aeonik)", fontSize: "clamp(20px, 2vw, 36px)", textTransform: "uppercase", lineHeight: 1 }}>{layer.label}</div>
+              <div className="body-sm" style={{ color: "var(--ink)", marginTop: "auto" }}>{layer.desc}</div>
             </div>
-            <div className="body-md" data-anim="fade-up" style={{ animationDelay: "0.85s", color: "var(--muted-dark)", maxWidth: "32ch" }}>
-              Conventions, business rules, "use orders not raw_orders". One file, version-controlled.
-            </div>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: "1.2vw" }}>
-            <div className="eyebrow" data-anim="fade-left" style={{ animationDelay: "0.55s", color: "var(--garden)" }}>COMMENT ON</div>
-            <div className="headline-md" data-anim="fade-up" style={{ animationDelay: "0.75s", maxWidth: "18ch", textTransform: "none", fontFamily: "var(--inter)", fontWeight: 500 }}>
-              Stored in the database.
-            </div>
-            <div className="body-md" data-anim="fade-up" style={{ animationDelay: "0.95s", color: "var(--muted-dark)", maxWidth: "32ch" }}>
-              Every tool that reads <code style={{ fontFamily: "var(--mono)", fontSize: "0.95em" }}>duckdb_columns()</code> gets them. Ships with the data, not the agent.
-            </div>
-          </div>
+          ))}
         </div>
       </div>
     </Slide>
@@ -1081,25 +1686,123 @@ function CommentOnCodeSlide({ active }: { active: boolean }) {
     <Slide variant="sand" active={active}>
       <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", gap: "2.5vw" }}>
         <div className="headline-lg" data-anim="fade-up" style={{ animationDelay: "0.2s" }}>
-          Context that ships with the data.
+          {COMMENT_ON.headline}
         </div>
         <div className="chrome" data-anim="fade-up" style={{ animationDelay: "0.55s", maxWidth: "84%" }}>
-          <div className="chrome-titlebar">
-            <div className="chrome-dots" aria-hidden="true">
-              <span className="chrome-dot chrome-dot--close" />
-              <span className="chrome-dot chrome-dot--min" />
-              <span className="chrome-dot chrome-dot--max" />
-            </div>
-            <div className="chrome-title">comments.sql</div>
+          <ChromeTitlebar title={COMMENT_ON.filename} />
+          <CodeBlock language="sql" code={COMMENT_ON.code} />
+        </div>
+      </div>
+    </Slide>
+  );
+}
+
+function BenchmarkRealitySlide({ active }: { active: boolean }) {
+  return (
+    <Slide variant="ink" active={active}>
+      <HeroCenter gap={30}>
+        <div className="eyebrow" data-anim="fade-left" style={{ animationDelay: "0.15s", color: "var(--muted-dark)" }}>
+          {BENCHMARK.eyebrow}
+        </div>
+        <div className="bigstat" data-anim="pop" style={{ animationDelay: "0.35s", color: "var(--sky)" }}>
+          {BENCHMARK.bigstat}
+        </div>
+        <div className="headline-md" data-anim="fade-up" style={{ animationDelay: "0.75s", color: "var(--sand)", textAlign: "center", textTransform: "none", fontFamily: "var(--inter)", fontWeight: 500, maxWidth: "34ch" }}>
+          {BENCHMARK.headline}
+        </div>
+        <div className="body-md" data-anim="fade-up" style={{ animationDelay: "1.05s", color: "var(--muted-dark)", maxWidth: "46ch", textAlign: "center" }}>
+          {BENCHMARK.body}
+        </div>
+      </HeroCenter>
+    </Slide>
+  );
+}
+
+function ContextBeatsModelSlide({ active }: { active: boolean }) {
+  return (
+    <Slide variant="sand" active={active}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", gap: "3vw" }}>
+        <div>
+          <div className="eyebrow" data-anim="fade-left" style={{ animationDelay: "0.15s" }}>{CONTEXT_BEATS.eyebrow}</div>
+          <div className="headline-lg" data-anim="fade-up" style={{ animationDelay: "0.35s", maxWidth: "18ch" }}>
+            {CONTEXT_BEATS.headline}
           </div>
-          <div className="chrome-body chrome-body--code">{`COMMENT ON TABLE orders IS
-  'Clean orders mart. Amounts in EUROS. Use this, not raw_orders.';
+        </div>
+        <div className="stagger-cards" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "2.5vw" }}>
+          {CONTEXT_BEATS.cards.map((card) => (
+            <div key={card.label} style={{ background: "var(--white)", border: "2px solid var(--ink)", boxShadow: "-8px 8px 0 var(--ink)", padding: "1.6vw", minHeight: "17vw", display: "flex", flexDirection: "column", gap: "1vw" }}>
+              <div className="eyebrow" style={{ color: "var(--muted)" }}>{card.label}</div>
+              <div style={{ fontFamily: "var(--aeonik)", fontSize: "clamp(34px, 4vw, 76px)", letterSpacing: "-0.02em", lineHeight: 0.95, color: "var(--sky)" }}>{card.stat}</div>
+              <div className="body-sm" style={{ color: "var(--ink)", marginTop: "auto" }}>{card.desc}</div>
+            </div>
+          ))}
+        </div>
+        <div className="body-md" data-anim="fade-up" style={{ animationDelay: "1.1s", color: "var(--muted-dark)", maxWidth: "60ch" }}>
+          {CONTEXT_BEATS.body}
+        </div>
+      </div>
+    </Slide>
+  );
+}
 
-COMMENT ON TABLE daily_revenue IS
-  'STALE. Only 5 of 20 locations. Use orders instead.';
+function ManualDriftSlide({ active }: { active: boolean }) {
+  return (
+    <Slide variant="sand" active={active} flush scatter={false}>
+      <HalfAndHalfTemplate
+        leftBackground="var(--sand)"
+        rightBackground="var(--sky)"
+        left={
+          <div style={{ display: "flex", flexDirection: "column", gap: "2vw" }}>
+            <div className="eyebrow" data-anim="fade-left" style={{ animationDelay: "0.15s" }}>{MANUAL_DRIFT.eyebrow}</div>
+            <div className="headline-lg" data-anim="fade-up" style={{ animationDelay: "0.35s" }}>
+              {MANUAL_DRIFT.headline}
+            </div>
+            <div className="body-md" data-anim="fade-up" style={{ animationDelay: "0.65s", color: "var(--muted-dark)", maxWidth: "34ch" }}>
+              {MANUAL_DRIFT.body}
+            </div>
+          </div>
+        }
+        right={
+          <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "1.4vw" }}>
+            {MANUAL_DRIFT.rows.map(([label, desc], i) => (
+              <div key={label} data-anim="fade-up" style={{ animationDelay: `${0.5 + i * 0.18}s`, background: "var(--white)", border: "2px solid var(--ink)", boxShadow: "-6px 6px 0 var(--ink)", padding: "1.2vw", textAlign: "left" }}>
+                <div style={{ fontFamily: "var(--aeonik)", fontSize: "clamp(18px, 2vw, 34px)", textTransform: "uppercase", lineHeight: 1 }}>{label}</div>
+                <div className="body-sm" style={{ color: "var(--ink)", marginTop: 8 }}>{desc}</div>
+              </div>
+            ))}
+          </div>
+        }
+        band={
+          <div className="split-cta">
+            {MANUAL_DRIFT.cta}
+          </div>
+        }
+      />
+    </Slide>
+  );
+}
 
-COMMENT ON COLUMN orders.order_total IS
-  'Total in EUROS (subtotal + tax). Use for revenue.';`}</div>
+function EvalLoopSlide({ active }: { active: boolean }) {
+  return (
+    <Slide variant="sand" active={active}>
+      <div style={{ flex: 1, display: "grid", gridTemplateColumns: "0.9fr 1.4fr", gap: "4vw", alignItems: "center" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "2vw" }}>
+          <div className="eyebrow" data-anim="fade-left" style={{ animationDelay: "0.15s" }}>{EVAL_LOOP.eyebrow}</div>
+          <div className="headline-lg" data-anim="fade-up" style={{ animationDelay: "0.35s", maxWidth: "13ch" }}>
+            {EVAL_LOOP.headline}
+          </div>
+          <div className="body-md" data-anim="fade-up" style={{ animationDelay: "0.65s", color: "var(--muted-dark)", maxWidth: "34ch" }}>
+            {EVAL_LOOP.body}
+          </div>
+        </div>
+        <div className="stagger" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.4vw" }}>
+          {EVAL_LOOP.steps.map(([label, desc], i) => (
+            <div key={label} style={{ background: "var(--white)", border: "2px solid var(--ink)", boxShadow: "-6px 6px 0 var(--ink)", padding: "1.15vw", minHeight: "8vw" }}>
+              <div className="eyebrow" style={{ color: i === 5 ? "var(--watermelon)" : "var(--sky)" }}>{String(i + 1).padStart(2, "0")}</div>
+              <div style={{ fontFamily: "var(--aeonik)", fontSize: "clamp(16px, 1.65vw, 30px)", textTransform: "uppercase", lineHeight: 1.05 }}>{label}</div>
+              <div className="body-sm" style={{ marginTop: 8, color: "var(--ink)" }}>{desc}</div>
+            </div>
+          ))}
         </div>
       </div>
     </Slide>
@@ -1110,33 +1813,26 @@ COMMENT ON COLUMN orders.order_total IS
 function TransitionSkillsDrift({ active }: { active: boolean }) {
   return (
     <Slide variant="sand" active={active}>
-      <HeroLeft gap={28}>
-        <div className="eyebrow" data-anim="fade-left" style={{ animationDelay: "0.15s" }}>But skills don't scale</div>
-        <div className="headline-xl" data-anim="fade-up" style={{ animationDelay: "0.35s", maxWidth: "26ch" }}>
-          Every analyst writes their own.<br />
-          <span style={{ color: "var(--sky)" }}>Then they drift.</span>
-        </div>
-        <AccentRule />
-      </HeroLeft>
+      <TransitionHeadline eyebrow={TRANSITION_SKILLS.eyebrow} lines={TRANSITION_SKILLS.headlineLines} highlightLast />
     </Slide>
   );
 }
 
 // S12 — Skill-as-infra card row
 function SkillAsInfraCardRow({ active }: { active: boolean }) {
-  const cards = [
-    { num: "01", name: "Write", desc: "One markdown file. Versioned in git. Owned by the data team." },
-    { num: "02", name: "Share", desc: "Mount into Claude, opencode, Cursor, your own loop. One source, many tools." },
-    { num: "03", name: "Govern", desc: "Reviewed like dbt models. Drift caught in PR, not in production." },
-  ];
   return (
     <Slide variant="sand" active={active}>
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", gap: "3vw" }}>
-        <div className="headline-lg" data-anim="fade-up" style={{ animationDelay: "0.2s" }}>
-          Standardize context as a skill.
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", gap: "2.5vw" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1.5fr auto", gap: "3vw", alignItems: "end" }}>
+          <div className="headline-lg" data-anim="fade-up" style={{ animationDelay: "0.2s" }}>
+            {MCP_MEMORY.headline}
+          </div>
+          <div data-anim="pop" style={{ animationDelay: "0.4s" }}>
+            <QrCard src={QR_MCP_MEMORY.src} label={QR_MCP_MEMORY.label} url={QR_MCP_MEMORY.url} compact />
+          </div>
         </div>
         <div className="stagger-cards" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "2.5vw", alignItems: "stretch" }}>
-          {cards.map((card) => (
+          {MCP_MEMORY.cards.map((card) => (
             <div
               key={card.num}
               style={{
@@ -1150,7 +1846,10 @@ function SkillAsInfraCardRow({ active }: { active: boolean }) {
                 minHeight: "16vw",
               }}
             >
-              <div style={{ fontFamily: "var(--aeonik)", fontSize: "1.4vw", color: "var(--sky)" }}>{card.num}</div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div style={{ fontFamily: "var(--aeonik)", fontSize: "1.4vw", color: "var(--sky)" }}>{card.num}</div>
+                <DuckIcon kind={card.duck} size={72} />
+              </div>
               <div style={{ fontFamily: "var(--aeonik)", fontSize: "2.4vw", textTransform: "uppercase", letterSpacing: "-0.02em", lineHeight: 1.05 }}>{card.name}</div>
               <div className="body-sm" style={{ color: "var(--ink)", marginTop: "auto" }}>{card.desc}</div>
             </div>
@@ -1165,15 +1864,7 @@ function SkillAsInfraCardRow({ active }: { active: boolean }) {
 function TransitionWait({ active }: { active: boolean }) {
   return (
     <Slide variant="sand" active={active}>
-      <HeroLeft gap={28}>
-        <div className="eyebrow" data-anim="fade-left" style={{ animationDelay: "0.15s" }}>Wait</div>
-        <div className="headline-xl" data-anim="fade-up" style={{ animationDelay: "0.35s", maxWidth: "26ch" }}>
-          You might already have<br />
-          the best semantic context<br />
-          <span style={{ color: "var(--sky)" }}>on the planet.</span>
-        </div>
-        <AccentRule />
-      </HeroLeft>
+      <TransitionHeadline eyebrow={TRANSITION_WAIT.eyebrow} lines={TRANSITION_WAIT.headlineLines} highlightLast />
     </Slide>
   );
 }
@@ -1186,41 +1877,19 @@ function DbtGoldenSplitSlide({ active }: { active: boolean }) {
         wideSide="left"
         wide={
           <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: "1.6vw", padding: "3.5vw 3vw" }}>
-            <div className="eyebrow" data-anim="fade-left" style={{ animationDelay: "0.15s" }}>Your dbt project</div>
+            <div className="eyebrow" data-anim="fade-left" style={{ animationDelay: "0.15s" }}>{DBT_SPLIT.eyebrow}</div>
             <div className="headline-md" data-anim="fade-up" style={{ animationDelay: "0.35s", maxWidth: "22ch", textTransform: "none", fontFamily: "var(--inter)", fontWeight: 500 }}>
-              You've been writing semantic context for years.
+              {DBT_SPLIT.headline}
             </div>
             <div className="chrome" data-anim="fade-up" style={{ animationDelay: "0.65s", maxWidth: "100%" }}>
-              <div className="chrome-titlebar">
-                <div className="chrome-dots" aria-hidden="true">
-                  <span className="chrome-dot chrome-dot--close" />
-                  <span className="chrome-dot chrome-dot--min" />
-                  <span className="chrome-dot chrome-dot--max" />
-                </div>
-                <div className="chrome-title">models/marts/orders.sql</div>
-              </div>
-              <div className="chrome-body chrome-body--code">{`{{ config(materialized='table') }}
-
--- Clean orders mart. Amounts in EUROS.
--- One row per customer order.
-SELECT
-  o.order_id,
-  o.customer_id,
-  o.ordered_at,
-  o.location_id,
-  o.subtotal + o.tax_paid AS order_total
-FROM {{ ref('stg_orders') }} o`}</div>
+              <ChromeTitlebar title={DBT_SPLIT.filename} />
+              <CodeBlock language="sql" code={DBT_SPLIT.code} />
             </div>
           </div>
         }
         narrow={
           <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: "1.8vw", padding: "3.5vw 2.5vw", height: "100%" }}>
-            {[
-              { label: "Tests", desc: "not_null, unique, relationships" },
-              { label: "Docs", desc: "description per column" },
-              { label: "Lineage", desc: "ref() graph, source to mart" },
-              { label: "Metrics", desc: "definitions, owners, layer" },
-            ].map((row, i) => (
+            {DBT_SPLIT.rows.map((row, i) => (
               <div key={row.label} data-anim="fade-up" style={{ animationDelay: `${0.6 + i * 0.15}s`, display: "flex", flexDirection: "column", gap: "0.3vw" }}>
                 <div style={{ fontFamily: "var(--aeonik)", fontSize: "2vw", textTransform: "uppercase", letterSpacing: "-0.02em", color: "var(--ink)" }}>{row.label}</div>
                 <div className="body-sm" style={{ color: "var(--ink)", opacity: 0.8 }}>{row.desc}</div>
@@ -1239,14 +1908,74 @@ function DbtStaggerSlide({ active }: { active: boolean }) {
     <Slide variant="sand" active={active}>
       <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", gap: "3vw" }}>
         <div className="headline-xl" data-anim="fade-up" style={{ animationDelay: "0.2s" }}>
-          What your dbt already has.
+          {DBT_STAGGER.headline}
         </div>
         <div className="stagger" style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-          <div className="body-lg" style={{ fontWeight: 500 }}>Schemas, definitions, owners.</div>
-          <div className="body-lg" style={{ fontWeight: 500 }}>Tests catching the bad joins.</div>
-          <div className="body-lg" style={{ fontWeight: 500 }}>Docs that explain the columns.</div>
-          <div className="body-lg" style={{ fontWeight: 500 }}>Lineage that traces the metric.</div>
-          <div className="body-lg" style={{ color: "var(--sky)", fontWeight: 500 }}>You've been writing context for years.</div>
+          {DBT_STAGGER.lines.map((line) => (
+            <div key={line} className="body-lg" style={{ fontWeight: 500 }}>{line}</div>
+          ))}
+          <div className="body-lg" style={{ color: "var(--sky)", fontWeight: 500 }}>{DBT_STAGGER.highlight}</div>
+        </div>
+      </div>
+    </Slide>
+  );
+}
+
+function ContextLayerSlide({ active }: { active: boolean }) {
+  return (
+    <Slide variant="sand" active={active}>
+      <div style={{ flex: 1, display: "grid", gridTemplateColumns: "1fr 1.2fr", gap: "4vw", alignItems: "center" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "2vw" }}>
+          <div className="eyebrow" data-anim="fade-left" style={{ animationDelay: "0.15s" }}>{CONTEXT_LAYER.eyebrow}</div>
+          <div className="headline-lg" data-anim="fade-up" style={{ animationDelay: "0.35s", maxWidth: "14ch" }}>
+            {CONTEXT_LAYER.headline}
+          </div>
+          <div className="body-md" data-anim="fade-up" style={{ animationDelay: "0.65s", color: "var(--muted-dark)", maxWidth: "36ch" }}>
+            {CONTEXT_LAYER.body}
+          </div>
+        </div>
+        <div data-anim="fade-up" style={{ animationDelay: "0.55s", position: "relative", minHeight: "34vw" }}>
+          {CONTEXT_LAYER.items.map((item, i) => (
+            <div key={item.label} style={{ position: "absolute", top: item.top, left: item.left, width: "38%", background: "var(--white)", border: "2px solid var(--ink)", boxShadow: "-8px 8px 0 var(--ink)", padding: "1.3vw", zIndex: 3 - i }}>
+              <div style={{ width: 46, height: 14, background: item.color, border: "2px solid var(--ink)", marginBottom: "1vw" }} />
+              <div style={{ fontFamily: "var(--aeonik)", fontSize: "clamp(22px, 2.6vw, 46px)", textTransform: "uppercase", lineHeight: 1 }}>{item.label}</div>
+              <div className="body-sm" style={{ color: "var(--ink)", marginTop: 8 }}>{item.desc}</div>
+            </div>
+          ))}
+          <svg viewBox="0 0 600 380" style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }} aria-hidden="true">
+            <path d="M 160 115 C 260 120, 285 180, 345 210" stroke="var(--ink)" strokeWidth="3" fill="none" strokeDasharray="8 8" />
+            <path d="M 390 245 C 450 260, 470 305, 505 332" stroke="var(--ink)" strokeWidth="3" fill="none" strokeDasharray="8 8" />
+          </svg>
+        </div>
+      </div>
+    </Slide>
+  );
+}
+
+function AnswerWorkflowSlide({ active }: { active: boolean }) {
+  return (
+    <Slide variant="sand" active={active}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", gap: "2.6vw" }}>
+        <div>
+          <div className="eyebrow" data-anim="fade-left" style={{ animationDelay: "0.15s" }}>{ANSWER_WORKFLOW.eyebrow}</div>
+          <div className="headline-lg" data-anim="fade-up" style={{ animationDelay: "0.35s", maxWidth: "20ch" }}>
+            {ANSWER_WORKFLOW.headline}
+          </div>
+        </div>
+        <div className="stagger" style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "1.2vw" }}>
+          {ANSWER_WORKFLOW.steps.map((step, i) => (
+            <div key={step.label} style={{ background: step.color, border: "2px solid var(--ink)", boxShadow: "-6px 6px 0 var(--ink)", padding: "1.1vw", minHeight: "17vw", display: "flex", flexDirection: "column", gap: "0.7vw" }}>
+              <div style={{ display: "flex", justifyContent: "center" }}>
+                <DuckIcon kind={step.duck} size={72} />
+              </div>
+              <div className="eyebrow" style={{ color: "var(--ink)", opacity: 0.7 }}>0{i + 1}</div>
+              <div style={{ fontFamily: "var(--aeonik)", fontSize: "clamp(18px, 2.1vw, 38px)", textTransform: "uppercase", lineHeight: 1, color: "var(--ink)" }}>{step.label}</div>
+              <div className="body-sm" style={{ color: "var(--ink)", marginTop: "auto" }}>{step.desc}</div>
+            </div>
+          ))}
+        </div>
+        <div className="body-md" data-anim="fade-up" style={{ animationDelay: "1.1s", color: "var(--muted-dark)", maxWidth: "56ch" }}>
+          {ANSWER_WORKFLOW.body}
         </div>
       </div>
     </Slide>
@@ -1259,15 +1988,15 @@ function RoleChangeRevealSlide({ active }: { active: boolean }) {
     <Slide variant="ink" active={active}>
       <HeroCenter gap={36}>
         <div className="eyebrow" data-anim="fade-left" style={{ animationDelay: "0.15s", color: "var(--muted-dark)" }}>
-          The new job
+          {ROLE_CHANGE.eyebrow}
         </div>
         <div className="headline-xxl" data-anim="pop" style={{ animationDelay: "0.45s", color: "var(--sand)", textAlign: "center" }}>
-          You've been doing this<br />
-          <span style={{ color: "var(--sky)" }}>all along.</span>
+          {ROLE_CHANGE.headlineLines[0]}<br />
+          <span style={{ color: "var(--sky)" }}>{ROLE_CHANGE.headlineLines[1]}</span>
         </div>
         <AccentRule />
-        <div className="headline-md" data-anim="fade-up" style={{ animationDelay: "1.1s", color: "var(--sand)", textAlign: "center", maxWidth: "26ch", textTransform: "none", fontFamily: "var(--inter)", fontWeight: 500 }}>
-          The bar moved up.<br />You cleared it.
+        <div className="headline-md" data-anim="fade-up" style={{ animationDelay: "1.1s", color: "var(--sand)", textAlign: "center", maxWidth: "26ch", textTransform: "none", fontFamily: "var(--inter)", fontWeight: 500, whiteSpace: "pre-line" }}>
+          {ROLE_CHANGE.tagline}
         </div>
       </HeroCenter>
     </Slide>
@@ -1276,19 +2005,14 @@ function RoleChangeRevealSlide({ active }: { active: boolean }) {
 
 // S17 — Action card row: three things to do Monday
 function ActionCardRow({ active }: { active: boolean }) {
-  const cards = [
-    { num: "01", name: "Comment", desc: "Add COMMENT ON to your three most-queried tables." },
-    { num: "02", name: "Skill", desc: "Write a 50-line skill.md. Drop it in Claude Code. Share with the team." },
-    { num: "03", name: "Expose", desc: "Wire it via MCP — yours, or MotherDuck's MCP server." },
-  ];
   return (
     <Slide variant="sand" active={active}>
       <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", gap: "3vw" }}>
         <div className="headline-lg" data-anim="fade-up" style={{ animationDelay: "0.2s" }}>
-          Three things to do Monday.
+          {ACTIONS.headline}
         </div>
         <div className="stagger-cards" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "2.5vw", alignItems: "stretch" }}>
-          {cards.map((card) => (
+          {ACTIONS.cards.map((card) => (
             <div
               key={card.num}
               style={{
@@ -1313,27 +2037,290 @@ function ActionCardRow({ active }: { active: boolean }) {
   );
 }
 
+const KIND_COLORS: Record<string, string> = {
+  code: "var(--garden)",
+  paper: "var(--watermelon)",
+  post: "var(--sun)",
+};
+
+function ResourcesSlide({ active }: { active: boolean }) {
+  return (
+    <Slide variant="sand" active={active}>
+      <div style={{ flex: 1, display: "grid", gridTemplateColumns: "1.5fr auto", gap: "2.5vw", alignItems: "center" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "1.8vw" }}>
+          <div>
+            <div className="eyebrow" data-anim="fade-left" style={{ animationDelay: "0.15s" }}>Resources</div>
+            <div className="headline-lg" data-anim="fade-up" style={{ animationDelay: "0.35s", maxWidth: "18ch" }}>
+              {RESOURCES.headline}
+            </div>
+          </div>
+          <div className="stagger-cards" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "1.3vw" }}>
+            {RESOURCES.items.map((item) => (
+              <a
+                key={item.url}
+                href={`https://${item.url}`}
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  background: "var(--white)",
+                  border: "2px solid var(--ink)",
+                  boxShadow: "-7px 7px 0 var(--ink)",
+                  padding: "1.1vw 1.3vw",
+                  minHeight: "8vw",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "0.5vw",
+                  color: "var(--ink)",
+                  textDecoration: "none",
+                  transition: "transform 0.15s ease, box-shadow 0.15s ease",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.transform = "translate(-2px, -2px)"; e.currentTarget.style.boxShadow = "-9px 9px 0 var(--ink)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = "-7px 7px 0 var(--ink)"; }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ width: 32, height: 9, background: KIND_COLORS[item.kind] || "var(--sky)", border: "2px solid var(--ink)" }} />
+                  <div className="eyebrow" style={{ color: "var(--muted)" }}>{item.label}</div>
+                </div>
+                <div style={{ fontFamily: "var(--aeonik)", fontSize: "clamp(16px, 1.6vw, 28px)", textTransform: "uppercase", letterSpacing: "-0.01em", lineHeight: 1.1 }}>{item.title}</div>
+                <div style={{ fontFamily: "var(--mono)", fontSize: "clamp(12px, 0.95vw, 16px)", color: "var(--muted-dark)", marginTop: "auto", overflowWrap: "anywhere" }}>{item.url}</div>
+              </a>
+            ))}
+          </div>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: "1.5vw", alignItems: "center" }}>
+          <div data-anim="pop" style={{ animationDelay: "0.55s" }}>
+            <QrCard src={QR_MCP_MEMORY.src} label={QR_MCP_MEMORY.label} url={QR_MCP_MEMORY.url} compact />
+          </div>
+          <a
+            href={`https://${RESOURCES.featured.url}`}
+            target="_blank"
+            rel="noreferrer"
+            data-anim="pop"
+            style={{
+              animationDelay: "0.75s",
+              display: "flex",
+              flexDirection: "column",
+              width: "min(18vw, 220px)",
+              background: "var(--white)",
+              border: "2px solid var(--ink)",
+              boxShadow: "-8px 8px 0 var(--ink)",
+              textDecoration: "none",
+              color: "var(--ink)",
+            }}
+          >
+            <img
+              src={`${import.meta.env.BASE_URL}${RESOURCES.featured.image}`}
+              alt={RESOURCES.featured.title}
+              style={{ display: "block", width: "100%", aspectRatio: "816 / 1056", objectFit: "cover", borderBottom: "2px solid var(--ink)" }}
+            />
+            <div style={{ padding: "10px 12px", display: "flex", flexDirection: "column", gap: 4 }}>
+              <div className="eyebrow" style={{ color: "var(--sky)", lineHeight: 1 }}>{RESOURCES.featured.label}</div>
+              <div style={{ fontFamily: "var(--aeonik)", fontSize: "clamp(13px, 1.1vw, 18px)", textTransform: "uppercase", letterSpacing: "-0.01em", lineHeight: 1.1 }}>
+                {RESOURCES.featured.title}
+              </div>
+              <div className="body-sm" style={{ color: "var(--muted)", fontSize: "0.85em" }}>{RESOURCES.featured.sub}</div>
+            </div>
+          </a>
+        </div>
+      </div>
+    </Slide>
+  );
+}
+
+// About me + About MotherDuck
+function AboutSlide({ active }: { active: boolean }) {
+  return (
+    <Slide variant="sand" active={active} flush scatter={false}>
+      <div className="split-frame" style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr" }}>
+        <section className="split-panel" style={{ background: "var(--sun)", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", gap: "1.4vw", padding: "4vw 3vw", textAlign: "center" }}>
+          <div
+            data-anim="pop"
+            style={{
+              animationDelay: "0.2s",
+              width: "min(220px, 14vw)",
+              aspectRatio: "1 / 1",
+              border: "3px solid var(--ink)",
+              boxShadow: "-8px 8px 0 var(--ink)",
+              overflow: "hidden",
+              background: "var(--white)",
+            }}
+          >
+            <img
+              src={`${import.meta.env.BASE_URL}${ABOUT.mePhoto}`}
+              alt="Dumky de Wilde"
+              style={{ display: "block", width: "100%", height: "100%", objectFit: "cover" }}
+            />
+          </div>
+          <div className="eyebrow" data-anim="fade-left" style={{ animationDelay: "0.35s", color: "var(--ink)" }}>{ABOUT.eyebrow}</div>
+          <div data-anim="fade-up" style={{ animationDelay: "0.5s", fontFamily: "var(--aeonik)", fontSize: "clamp(26px, 2.6vw, 48px)", letterSpacing: "-0.01em", lineHeight: 1.05 }}>
+            {ABOUT.meHeadline}
+          </div>
+          <div className="body-md" data-anim="fade-up" style={{ animationDelay: "0.65s", color: "var(--ink)", maxWidth: "30ch", fontWeight: 500 }}>
+            {ABOUT.meSub}
+          </div>
+          <div className="body-sm" data-anim="fade-up" style={{ animationDelay: "0.8s", color: "var(--ink)", maxWidth: "34ch", lineHeight: 1.5 }}>
+            {ABOUT.meBody}
+          </div>
+          <a
+            data-anim="fade-up"
+            href={`https://${ABOUT.meLink}`}
+            target="_blank"
+            rel="noreferrer"
+            style={{
+              animationDelay: "0.95s",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              fontFamily: "var(--mono)",
+              fontSize: "clamp(13px, 1.05vw, 18px)",
+              color: "var(--ink)",
+              textDecoration: "none",
+              padding: "6px 12px",
+              border: "2px solid var(--ink)",
+              background: "var(--white)",
+              marginTop: "0.4vw",
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M20.5 2h-17A1.5 1.5 0 002 3.5v17A1.5 1.5 0 003.5 22h17a1.5 1.5 0 001.5-1.5v-17A1.5 1.5 0 0020.5 2zM8 19H5V8h3v11zM6.5 6.7A1.7 1.7 0 118.2 5 1.7 1.7 0 016.5 6.7zM19 19h-3v-5.5c0-1.3 0-3-1.8-3s-2 1.4-2 2.9V19h-3V8h2.9v1.5h.1a3.2 3.2 0 012.9-1.6c3.1 0 3.7 2 3.7 4.7V19z" />
+            </svg>
+            {ABOUT.meLink}
+          </a>
+        </section>
+        <section className="split-panel" style={{ background: "var(--sand)", display: "flex", flexDirection: "column", justifyContent: "center", gap: "1.5vw", padding: "4vw 4vw" }}>
+          <div className="eyebrow" data-anim="fade-left" style={{ animationDelay: "0.25s" }}>About MotherDuck</div>
+          <div className="headline-lg" data-anim="fade-up" style={{ animationDelay: "0.4s", maxWidth: "18ch" }}>
+            {ABOUT.duckHeadline}
+          </div>
+          <AccentRule />
+          <div className="body-md" data-anim="fade-up" style={{ animationDelay: "0.7s", color: "var(--muted-dark)", maxWidth: "52ch" }}>
+            {ABOUT.duckBody}
+          </div>
+          <div data-anim="fade-up" style={{ animationDelay: "0.9s", display: "flex", gap: "1.6vw", flexWrap: "wrap" }}>
+            {[
+              { label: "DuckDB engine", color: "var(--sun)" },
+              { label: "Hybrid execution", color: "var(--sky)" },
+              { label: "dbt-native", color: "var(--garden)" },
+              { label: "Terabyte-scale", color: "var(--watermelon)" },
+            ].map((chip) => (
+              <div key={chip.label} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ width: 28, height: 12, background: chip.color, border: "2px solid var(--ink)" }} />
+                <div style={{ fontFamily: "var(--aeonik)", fontSize: "clamp(14px, 1.3vw, 22px)", textTransform: "uppercase", letterSpacing: "0.02em" }}>{chip.label}</div>
+              </div>
+            ))}
+          </div>
+          <div className="body-sm" data-anim="fade-up" style={{ animationDelay: "1.1s", fontFamily: "var(--mono)", color: "var(--muted-dark)", marginTop: "1vw" }}>
+            {ABOUT.duckLink}
+          </div>
+        </section>
+      </div>
+    </Slide>
+  );
+}
+
+// Propositions overview: four MotherDuck building blocks for agents.
+function PropositionsSlide({ active }: { active: boolean }) {
+  return (
+    <Slide variant="sand" active={active}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", gap: "2.4vw" }}>
+        <div>
+          <div className="eyebrow" data-anim="fade-left" style={{ animationDelay: "0.15s" }}>{PROPOSITIONS.eyebrow}</div>
+          <div className="headline-lg" data-anim="fade-up" style={{ animationDelay: "0.35s", maxWidth: "22ch" }}>
+            {PROPOSITIONS.headline}
+          </div>
+        </div>
+        <div className="stagger-cards" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "1.6vw" }}>
+          {PROPOSITIONS.cards.map((card) => (
+            <div
+              key={card.label}
+              style={{
+                background: "var(--white)",
+                border: "2px solid var(--ink)",
+                boxShadow: "-7px 7px 0 var(--ink)",
+                padding: "1.4vw",
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.9vw",
+                minHeight: "15vw",
+              }}
+            >
+              <DuckIcon kind={card.duck} size={84} />
+              <div style={{ fontFamily: "var(--aeonik)", fontSize: "clamp(18px, 1.9vw, 34px)", textTransform: "uppercase", letterSpacing: "-0.01em", lineHeight: 1.05 }}>
+                {card.label}
+              </div>
+              <div className="body-sm" style={{ color: "var(--ink)", marginTop: "auto" }}>{card.desc}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </Slide>
+  );
+}
+
+// Dives focus slide: two example screenshots side-by-side.
+function DivesSlide({ active }: { active: boolean }) {
+  return (
+    <Slide variant="sand" active={active}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", gap: "2vw", minHeight: 0 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "3vw", alignItems: "end" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.6vw" }}>
+            <div className="eyebrow eyebrow--sky" data-anim="fade-left" style={{ animationDelay: "0.15s" }}>{DIVES.eyebrow}</div>
+            <div className="headline-md" data-anim="fade-up" style={{ animationDelay: "0.35s", maxWidth: "20ch" }}>
+              {DIVES.headline}
+            </div>
+          </div>
+          <div className="body-md" data-anim="fade-up" style={{ animationDelay: "0.65s", color: "var(--muted-dark)", maxWidth: "56ch" }}>
+            {DIVES.body}
+          </div>
+        </div>
+        <div className="stagger-cards" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2vw", flex: 1, minHeight: 0 }}>
+          {DIVES.examples.map((ex) => (
+            <div
+              key={ex.src}
+              style={{
+                background: "var(--white)",
+                border: "2px solid var(--ink)",
+                boxShadow: "-8px 8px 0 var(--ink)",
+                overflow: "hidden",
+                display: "flex",
+                flexDirection: "column",
+              }}
+            >
+              <div style={{ flex: 1, overflow: "hidden", position: "relative", minHeight: 0 }}>
+                <img
+                  src={`${import.meta.env.BASE_URL}${ex.src}`}
+                  alt={ex.caption}
+                  style={{ display: "block", width: "100%", height: "100%", objectFit: "cover", objectPosition: "top" }}
+                />
+              </div>
+              <div style={{ padding: "0.8vw 1.2vw", borderTop: "2px solid var(--ink)", background: "var(--sand)", fontFamily: "var(--aeonik)", fontSize: "clamp(13px, 1.1vw, 20px)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                {ex.caption}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </Slide>
+  );
+}
+
 // S18 — Closing CTA
 function CtaSlide({ active }: { active: boolean }) {
   return (
     <Slide variant="sand" active={active}>
       <div style={{ flex: 1, display: "grid", gridTemplateColumns: "1fr 2.2fr", gap: "4vw", alignItems: "center", padding: "0 2vw" }}>
-        <div data-anim="pop" style={{ animationDelay: "0.3s", background: "var(--white)", border: "2px solid var(--ink)", boxShadow: "-8px 8px 0 var(--ink)", padding: "2vw", aspectRatio: "1 / 1", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div className="eyebrow" style={{ color: "var(--muted)", textAlign: "center" }}>
-            QR code<br />placeholder
-          </div>
-        </div>
+        <QrCard src={QR_FOLLOW.src} url={QR_FOLLOW.url} label="Slides + resources" />
         <div style={{ display: "flex", flexDirection: "column", gap: "1.2vw" }}>
-          <div className="eyebrow" data-anim="fade-left" style={{ animationDelay: "0.5s" }}>Thanks for listening</div>
+          <div className="eyebrow" data-anim="fade-left" style={{ animationDelay: "0.5s" }}>{CTA.eyebrow}</div>
           <div className="headline-xl" data-anim="fade-up" style={{ animationDelay: "0.7s" }}>
-            Slides + repo:
+            {CTA.headline}
           </div>
           <AccentRule />
           <div data-anim="fade-up" style={{ animationDelay: "1.05s", fontFamily: "var(--aeonik)", fontSize: "clamp(28px, 3.2vw, 56px)", letterSpacing: "-0.02em", lineHeight: 1.1 }}>
-            motherduck.com/talks/<br />infrastructure-for-answers
+            {CTA.url}<br />/infrastructure-for-answers
           </div>
           <div className="eyebrow" data-anim="fade-up" style={{ animationDelay: "1.25s", color: "var(--muted)" }}>
-            @dumkydewilde · Dumky de Wilde · Amsterdam AE Meetup · 27 May 2026
+            {CTA.signoff}
           </div>
         </div>
       </div>
@@ -1343,27 +2330,40 @@ function CtaSlide({ active }: { active: boolean }) {
 
 const slides = [
   TitleSlide,
+  AboutSlide,
+  PropositionsSlide,
+  DivesSlide,
   TransitionWhereWeAre,
   TrapSetupSlide,
+  TrapCatchSlide,
   TrapRevealSlide,
   TransitionWhy,
   LevelsCardRow,
+  AgenticLoopAnimationSlide,
   LoopCodeSlide,
   TransitionContextWasIt,
   TwoLayersContextSlide,
   CommentOnCodeSlide,
+  BenchmarkRealitySlide,
+  ContextBeatsModelSlide,
+  ManualDriftSlide,
+  EvalLoopSlide,
   TransitionSkillsDrift,
   SkillAsInfraCardRow,
   TransitionWait,
   DbtGoldenSplitSlide,
   DbtStaggerSlide,
+  ContextLayerSlide,
+  AnswerWorkflowSlide,
   RoleChangeRevealSlide,
   ActionCardRow,
+  ResourcesSlide,
   CtaSlide,
 ];
 
 export default function InfrastructureForAnswersDeck() {
   const [current, setCurrent] = useState(0);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const total = slides.length;
   useSQLQuery(`SELECT 1`); // activate the Dive runtime
 
@@ -1371,23 +2371,31 @@ export default function InfrastructureForAnswersDeck() {
     setCurrent((prev) => Math.max(0, Math.min(total - 1, prev + dir)));
   }, [total]);
 
+  const toggleFullscreen = useCallback(() => {
+    if (document.fullscreenElement) {
+      document.exitFullscreen?.();
+    } else {
+      document.documentElement.requestFullscreen?.();
+    }
+  }, []);
+
+  useEffect(() => {
+    const onChange = () => setIsFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "ArrowRight" || e.key === "ArrowDown" || e.key === " " || e.key === "PageDown") { e.preventDefault(); go(1); }
       else if (e.key === "ArrowLeft" || e.key === "ArrowUp" || e.key === "PageUp") { e.preventDefault(); go(-1); }
-      else if (e.key === "f" || e.key === "F") { document.documentElement.requestFullscreen?.(); }
+      else if (e.key === "f" || e.key === "F") { toggleFullscreen(); }
       else if (e.key === "Home") { e.preventDefault(); setCurrent(0); }
       else if (e.key === "End") { e.preventDefault(); setCurrent(total - 1); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [go, total]);
-
-  const handleTap = useCallback((e: React.MouseEvent) => {
-    const target = e.target as HTMLElement;
-    if (target.closest("a, button")) return;
-    go(e.clientX > window.innerWidth / 2 ? 1 : -1);
-  }, [go]);
+  }, [go, total, toggleFullscreen]);
 
   useEffect(() => {
     let lastWheel = 0;
@@ -1412,10 +2420,49 @@ export default function InfrastructureForAnswersDeck() {
   return (
     <Fragment>
       <style>{DECK_CSS}</style>
-      <div className="deck" onClick={handleTap}>
+      <div className="deck">
         {slides.map((S, i) => <S key={i} active={i === current} />)}
+        <button
+          type="button"
+          className="nav-zone nav-zone--left"
+          aria-label="Previous slide"
+          onClick={() => go(-1)}
+          disabled={current === 0}
+        >
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          className="nav-zone nav-zone--right"
+          aria-label="Next slide"
+          onClick={() => go(1)}
+          disabled={current === total - 1}
+        >
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+        </button>
         <div className="progress" style={{ width: `${(current + 1) / total * 100}%` }} />
         <div className="slide-counter">{current + 1} / {total}</div>
+        <button
+          type="button"
+          className="fullscreen-toggle"
+          aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+          title={isFullscreen ? "Exit fullscreen (f)" : "Fullscreen (f)"}
+          onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }}
+        >
+          {isFullscreen ? (
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M8 3v5H3M16 3v5h5M3 16h5v5M21 16h-5v5" />
+            </svg>
+          ) : (
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M3 8V3h5M21 8V3h-5M3 16v5h5M21 16v5h-5" />
+            </svg>
+          )}
+        </button>
       </div>
     </Fragment>
   );
