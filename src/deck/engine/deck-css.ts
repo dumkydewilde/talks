@@ -147,6 +147,9 @@ html, body, #root {
 .chrome-title { font-family: var(--aeonik); font-weight: 400; font-size: clamp(12px, 1.1vw, 20px); letter-spacing: 0.04em; line-height: 1.2; text-transform: uppercase; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .chrome-body { background: var(--white); color: var(--ink); }
 .chrome-body--code { padding: clamp(16px, 2vw, 36px); font-family: var(--mono); font-size: clamp(14px, 1.3vw, 26px); line-height: 1.4; white-space: pre; overflow-x: auto; tab-size: 4; text-align: left; }
+.chrome-footer { display: flex; align-items: baseline; justify-content: space-between; gap: clamp(12px, 1.5vw, 28px); padding: clamp(12px, 1.4vw, 22px) clamp(16px, 1.8vw, 30px); border-top: 2px solid var(--ink); text-align: left; }
+.chrome-footer__label { color: var(--ink); flex-shrink: 0; }
+.chrome-footer__value { font-family: var(--aeonik); font-size: clamp(18px, 2vw, 38px); letter-spacing: -0.01em; line-height: 1.05; color: var(--ink); white-space: nowrap; }
 
 /* ── Split frame (golden-split, half-and-half, left-title) ── full-bleed, edge to edge */
 .split-frame { position: relative; z-index: 1; flex: 1; width: 100%; height: 100%; min-height: 0; background: var(--sand); overflow: hidden; display: grid; }
@@ -181,13 +184,18 @@ html, body, #root {
 .stat__value { font-family: var(--aeonik); font-weight: 400; font-size: clamp(64px, min(15vw, 24vh), 200px); letter-spacing: -0.03em; line-height: 1.0; }
 .stat__label { font-family: var(--aeonik); font-size: clamp(13px, 1.1vw, 22px); letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
 
-/* ── Carousel ── auto-advancing image slideshow */
-.carousel { position: relative; width: 100%; flex: 1 1 auto; min-height: clamp(240px, 48vh, 600px); }
-.carousel__slide { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.6s ease; pointer-events: none; }
+/* ── Carousel ── auto-advancing image slideshow.
+   Slides are stacked in a single grid cell, so the carousel sizes to the TALLEST
+   slide (no fixed height, no letterbox whitespace). */
+.carousel { position: relative; width: 100%; display: grid; }
+.carousel__slide { grid-area: 1 / 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.6s ease; pointer-events: none; }
 .carousel__slide.is-active { opacity: 1; pointer-events: auto; }
-.carousel__slide > * { max-width: 100%; max-height: 100%; }
-.carousel__slide .block-card--image { width: 100%; height: 100%; min-height: 0; }
-.carousel__slide img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.carousel__slide > * { max-width: 100%; }
+/* framed image card sizes to its image rather than a fixed cell */
+.carousel__slide .block-card--image { width: 100%; height: auto; min-height: 0; }
+.carousel__slide .block-img-wrap { flex: none; height: auto; display: flex; align-items: center; justify-content: center; overflow: visible; }
+.carousel__slide .block-card--image img,
+.carousel__slide > img { width: auto; height: auto; max-width: 100%; max-height: 66vh; object-fit: contain; }
 .carousel__dots { position: absolute; bottom: -28px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; }
 .carousel__dot { width: 11px; height: 11px; border-radius: 999px; border: 2px solid var(--ink); background: transparent; cursor: pointer; padding: 0; transition: background 0.2s ease; }
 .carousel__dot.is-active { background: var(--ink); }

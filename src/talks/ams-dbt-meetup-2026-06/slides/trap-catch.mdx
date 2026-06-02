@@ -10,7 +10,7 @@ In the raw source, `order_total` is stored in cents. The dbt mart is where the u
 </Left>
 
 <Right>
-<Terminal title="models/marts/orders.sql">
+<Terminal title="models/marts/orders.sql" footerLabel="conversion" footer="16,990.42 / 100 = €169.90" footerColor="sun">
 
 ```sql
 -- raw_orders
@@ -22,6 +22,4 @@ avg(order_total) / 100.0
 ```
 
 </Terminal>
-
-<Callout accent="sun">conversion · 16,990.42 / 100 = €169.90</Callout>
 </Right>
