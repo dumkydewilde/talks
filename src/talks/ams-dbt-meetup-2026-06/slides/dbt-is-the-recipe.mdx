@@ -1,0 +1,33 @@
+---
+template: golden-split
+---
+
+<Left>
+### dbt is the recipe
+# You've been writing context for years.
+Descriptions, tests, lineage, owners, classifications. It's all semantic context an agent can read.
+</Left>
+
+<Right>
+<Terminal title="models/marts/schema.yml">
+
+```yaml
+models:
+  - name: orders
+    description: "Clean orders mart. Amounts in EUROS."
+    meta:
+      owner: analytics-eng
+      classification: pii-free
+    columns:
+      - name: order_total
+        description: "Total in EUROS (subtotal + tax)."
+        tests: [not_null]
+      - name: customer_id
+        tests:
+          - relationships:
+              to: ref('customers')
+              field: customer_id
+```
+
+</Terminal>
+</Right>

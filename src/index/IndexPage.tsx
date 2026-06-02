@@ -77,6 +77,12 @@ type Talk = {
 
 const talks: Talk[] = [
   {
+    slug: "ams-dbt-meetup-2026-06",
+    title: "Infrastructure for Answers",
+    eyebrow: "Amsterdam dbt Meetup · June 2026",
+    subtitle: "From copy-paste SQL to context-rich data agents that are faster, cheaper, and more correct.",
+  },
+  {
     slug: "infrastructure-for-answers",
     title: "Infrastructure for Answers",
     eyebrow: "Amsterdam AE Meetup · 27 May 2026",

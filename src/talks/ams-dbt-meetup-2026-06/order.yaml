@@ -1,0 +1,39 @@
+# Intro + MotherDuck product
+- title
+- speaker
+- motherduck-for-agents
+- dashboards-as-code
+
+# Everyone's using agents — and here's how they get it wrong
+- where-we-are
+- trap-setup
+- trap-catch
+- trap-reveal
+- goal
+
+# An agent is just a loop
+- agents-are-a-loop
+- three-levels
+- the-loop
+- owning-the-loop
+
+# What it needs is context
+- needs-context
+- context-stack
+- context-ships
+- why-worth-it
+- three-dimensions
+
+# dbt is the context you already have
+- dbt-is-the-recipe
+- more-context
+
+# The path forward: wrap dbt into your MCP
+- wrap-into-mcp
+- mcp-tools
+
+# It's a recipe, not a demo
+- adjust-process
+- workflow-is-product
+- next-week
+- resources

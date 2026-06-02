@@ -1,0 +1,11 @@
+---
+template: top-title
+---
+
+<ChatTerminal title="Claudexini" inputPlaceholder="Ask a follow-up...">
+  <ChatBubble role="user">What's the average order value?</ChatBubble>
+  <ChatBubble role="agent">SELECT avg(order_total) FROM raw_orders;</ChatBubble>
+  <ChatBubble role="result">16,990.42</ChatBubble>
+</ChatTerminal>
+
+<Callout box accent="watermelon">Looks plausible. That is the problem.</Callout>

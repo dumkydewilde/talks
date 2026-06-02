@@ -1,0 +1,28 @@
+---
+template: top-title
+---
+
+# Owning the loop is cheap.
+<Terminal title="agent_loop.py">
+
+```python
+def ask(question):
+    messages = [{"role": "user", "content": question}]
+    while True:
+        resp = client.chat.completions.create(
+            model=MODEL, tools=tools, messages=messages,
+        )
+        choice = resp.choices[0]
+        messages.append(choice.message)
+        if choice.finish_reason != "tool_calls":
+            return choice.message.content
+        for call in choice.message.tool_calls:
+            args = json.loads(call.function.arguments)
+            result = run_tool(call.function.name, args)
+            messages.append({"role": "tool",
+                             "tool_call_id": call.id,
+                             "content": result})
+```
+
+</Terminal>
+<Callout box accent="sky">A while-loop and a tools dict. Now you can swap models, log every trace, and control failure.</Callout>

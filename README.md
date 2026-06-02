@@ -20,8 +20,19 @@ npm run preview   # serves the built site at http://localhost:4173/talks/
 
 ## Adding a new talk
 
-1. Create `src/talks/<slug>/deck.tsx` and `src/talks/<slug>/main.tsx`.
-2. Create `<slug>/index.html` in the project root with a `<script type="module" src="/src/talks/<slug>/main.tsx">` tag.
-3. Add the slug to `rollupOptions.input` in `vite.config.ts`.
-4. Add an entry to the `talks` array in `src/index/IndexPage.tsx`.
-5. Commit and push — GH Actions builds and deploys.
+Prefer the shared MDX deck framework for new talks. The older
+`infrastructure-for-answers` deck is a legacy bespoke React deck and can stay as-is.
+
+1. Create `src/talks/<slug>/slides/`, one `.mdx` file per slide.
+2. Create `src/talks/<slug>/order.yaml` with slide ids in presentation order.
+3. Create `src/talks/<slug>/talk.yaml` with deck metadata.
+4. Create `src/talks/<slug>/main.tsx` using the MDX loader pattern from
+   `src/talks/ams-dbt-meetup-2026-06/main.tsx`.
+5. Create `<slug>/index.html` in the project root with a
+   `<script type="module" src="/src/talks/<slug>/main.tsx">` tag.
+6. Add the slug to `rollupOptions.input` in `vite.config.ts`.
+7. Add an entry to the `talks` array in `src/index/IndexPage.tsx`.
+8. Run `npm run build`.
+
+For the full agent handoff, including MDX frontmatter, templates, slots, components,
+and arrange mode, see [`docs/deck-framework.md`](docs/deck-framework.md).

@@ -1,0 +1,29 @@
+---
+template: golden-split
+ratio: 2/3-1/3
+---
+
+<Left>
+### There's more than dbt
+# Context lives all over your company.
+- Query history: what people actually ask, and the joins that work
+- Company knowledge: competitors, segments, the fiscal calendar
+- Legal & compliance: PII, retention, residency rules
+- Confluence, tickets, Slack threads: the "why" behind the data
+</Left>
+
+<Right>
+<Terminal title="popular_joins.sql">
+
+```sql
+-- the warehouse already knows
+SELECT query_text, count(*) AS runs
+FROM motherduck_query_history
+WHERE success
+GROUP BY ALL
+ORDER BY runs DESC
+LIMIT 10;
+```
+
+</Terminal>
+</Right>
