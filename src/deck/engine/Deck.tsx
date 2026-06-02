@@ -8,12 +8,43 @@ import type { LoadedSlide } from "./loadSlides";
 
 export type TalkConfig = { title?: string; [key: string]: unknown };
 
+// Resolve a URL hash to a slide index. Accepts a slide id (#trap-catch) or a
+// 1-based number (#3). Unknown/empty → first slide.
+function indexFromHash(slides: LoadedSlide[], hash: string): number {
+  const h = decodeURIComponent(hash.replace(/^#/, "")).trim();
+  if (!h) return 0;
+  const byId = slides.findIndex((s) => s.id === h);
+  if (byId >= 0) return byId;
+  const n = parseInt(h, 10);
+  if (!Number.isNaN(n) && n >= 1 && n <= slides.length) return n - 1;
+  return 0;
+}
+
 export function Deck({ slides, config }: { slides: LoadedSlide[]; config?: TalkConfig }) {
-  const [current, setCurrent] = useState(0);
+  const [current, setCurrent] = useState(() =>
+    indexFromHash(slides, typeof window !== "undefined" ? window.location.hash : "")
+  );
   const [isFullscreen, setIsFullscreen] = useState(false);
   const total = slides.length;
 
   useEffect(() => { if (config?.title) document.title = config.title; }, [config?.title]);
+
+  // Reflect the current slide in the URL (#slide-id) so refresh/share restores it.
+  useEffect(() => {
+    const id = slides[current]?.id;
+    if (!id) return;
+    const next = `#${id}`;
+    if (window.location.hash !== next) {
+      window.history.replaceState(null, "", next);
+    }
+  }, [current, slides]);
+
+  // Follow external hash changes (shared link, manual edit, back/forward).
+  useEffect(() => {
+    const onHash = () => setCurrent(indexFromHash(slides, window.location.hash));
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, [slides]);
 
   const go = useCallback((dir: number) => {
     setCurrent((prev) => Math.max(0, Math.min(total - 1, prev + dir)));
