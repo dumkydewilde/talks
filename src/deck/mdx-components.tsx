@@ -5,7 +5,7 @@
 import * as React from "react";
 import { Left, Right, Top, Bottom, Center, Block } from "./slots/slots";
 import { CodeBlock, type CodeLanguage } from "./components/CodeBlock";
-import { Terminal, Chrome } from "./components/Terminal";
+import { Terminal, Chrome, ChatTerminal, ChatBubble } from "./components/Terminal";
 import { Image } from "./components/Image";
 import { Icon } from "./components/Icon";
 import { QR } from "./components/QR";
@@ -14,11 +14,14 @@ import { Stat } from "./components/Stat";
 import { Link } from "./components/Link";
 import { Rule } from "./components/Rule";
 import { Carousel } from "./components/Carousel";
+import { LoopDiagram } from "./components/LoopDiagram";
+import { DumbbellChart } from "./components/DumbbellChart";
+import { OptimizationTriangle } from "./components/OptimizationTriangle";
 
 function langOf(className?: string): CodeLanguage {
   const m = /language-(\w+)/.exec(className ?? "");
   const lang = m?.[1];
-  return lang === "python" || lang === "sql" ? lang : "log";
+  return lang === "python" || lang === "sql" || lang === "yaml" ? lang : "log";
 }
 
 export const MDX_COMPONENTS = {
@@ -41,5 +44,6 @@ export const MDX_COMPONENTS = {
   // slot vocabulary
   Left, Right, Top, Bottom, Center, Block,
   // component vocabulary
-  CodeBlock, Terminal, Chrome, Image, Icon, QR, Callout, Stat, Link, Rule, Carousel,
+  CodeBlock, Terminal, Chrome, ChatTerminal, ChatBubble, Image, Icon, QR, Callout, Stat, Link, Rule, Carousel,
+  LoopDiagram, DumbbellChart, OptimizationTriangle,
 };

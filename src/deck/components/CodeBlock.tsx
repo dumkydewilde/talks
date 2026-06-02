@@ -53,6 +53,30 @@ function tokenizeSql(src: string): Token[] {
   return tokens;
 }
 
+// Minimal YAML: comments, quoted strings, `key:` names, numbers, booleans/null.
+function tokenizeYaml(src: string): Token[] {
+  const tokens: Token[] = [];
+  let i = 0;
+  while (i < src.length) {
+    const c = src[i];
+    if (c === "#") { const end = src.indexOf("\n", i); const stop = end === -1 ? src.length : end; tokens.push({ kind: "com", text: src.slice(i, stop) }); i = stop; continue; }
+    if (c === '"' || c === "'") { const q = c; let j = i + 1; while (j < src.length && src[j] !== q) { if (src[j] === "\\") j++; j++; } tokens.push({ kind: "str", text: src.slice(i, j + 1) }); i = j + 1; continue; }
+    if (/[0-9]/.test(c)) { let j = i; while (j < src.length && /[0-9.]/.test(src[j])) j++; tokens.push({ kind: "num", text: src.slice(i, j) }); i = j; continue; }
+    if (/[A-Za-z_]/.test(c)) {
+      let j = i; while (j < src.length && /[A-Za-z0-9_]/.test(src[j])) j++;
+      const word = src.slice(i, j);
+      const lower = word.toLowerCase();
+      let k = j; while (src[k] === " ") k++;
+      let kind = "id";
+      if (src[k] === ":") kind = "kw";
+      else if (lower === "true" || lower === "false" || lower === "null" || lower === "yes" || lower === "no") kind = "bi";
+      tokens.push({ kind, text: word }); i = j; continue;
+    }
+    tokens.push({ kind: "punct", text: c }); i++;
+  }
+  return tokens;
+}
+
 const TOKEN_STYLES: Record<string, React.CSSProperties> = {
   kw: { color: "#D63B6A" },
   fn: { color: "#0E7F73" },
@@ -65,7 +89,7 @@ const TOKEN_STYLES: Record<string, React.CSSProperties> = {
   punct: { color: "var(--ink)" },
 };
 
-export type CodeLanguage = "python" | "sql" | "log";
+export type CodeLanguage = "python" | "sql" | "yaml" | "log";
 
 // `log` is a transcript, not source: render inline markdown (**bold**, `code`)
 // while preserving whitespace, so prompts like "> **User**:" come out formatted.
@@ -85,7 +109,7 @@ function renderLogMarkdown(src: string): React.ReactNode[] {
 
 export function CodeBlock({ language = "log", code, children }: { language?: CodeLanguage; code?: string; children?: string }) {
   const src = (code ?? (typeof children === "string" ? children : "")).replace(/\n$/, "");
-  const tokens = language === "python" ? tokenizePython(src) : language === "sql" ? tokenizeSql(src) : null;
+  const tokens = language === "python" ? tokenizePython(src) : language === "sql" ? tokenizeSql(src) : language === "yaml" ? tokenizeYaml(src) : null;
   if (!tokens) return <div className="chrome-body chrome-body--code">{renderLogMarkdown(src)}</div>;
   return (
     <div className="chrome-body chrome-body--code">

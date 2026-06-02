@@ -51,3 +51,43 @@ export function Terminal({
 }
 
 export const Chrome = Terminal;
+
+export function ChatTerminal({
+  title, children, maxWidth, inputPlaceholder = "",
+}: {
+  title?: string;
+  children?: React.ReactNode;
+  maxWidth?: number | string;
+  inputPlaceholder?: string;
+}) {
+  return (
+    <div className="chrome chat-terminal" data-anim="fade-up" style={maxWidth ? { maxWidth } : undefined}>
+      <ChromeTitlebar title={title} />
+      <div className="chat-terminal__body">
+        <div className="chat-terminal__messages">
+          {children}
+        </div>
+        <div className="chat-input" aria-hidden="true">
+          <span className="chat-input__placeholder">{inputPlaceholder}</span>
+          <span className="chat-input__cursor" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function ChatBubble({
+  role = "agent", children,
+}: {
+  role?: "user" | "agent" | "result";
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className={`chat-row chat-row--${role}`}>
+      <div className="chat-bubble">
+        <div className="chat-bubble__label">{role}</div>
+        <div className="chat-bubble__content">{children}</div>
+      </div>
+    </div>
+  );
+}

@@ -1,14 +1,25 @@
 // Auto-advancing image carousel. Cycles through its children (typically <Image> or
 // <Block image>) on a timer, with a crossfade and clickable position dots.
-//   <Carousel interval={3500}>
+//   <Carousel interval={3500} objectFit="cover">
 //   <Block image="a.png" caption="…" />
 //   <Block image="b.png" caption="…" />
 //   </Carousel>
 import * as React from "react";
 
-export function Carousel({ interval = 4000, children }: { interval?: number; children?: React.ReactNode }) {
+type CarouselObjectFit = React.CSSProperties["objectFit"];
+
+export function Carousel({
+  interval = 4000,
+  objectFit,
+  children,
+}: {
+  interval?: number;
+  objectFit?: CarouselObjectFit;
+  children?: React.ReactNode;
+}) {
   const slides = React.Children.toArray(children).filter(Boolean);
   const [i, setI] = React.useState(0);
+  const style = objectFit ? ({ "--carousel-object-fit": objectFit } as React.CSSProperties) : undefined;
 
   React.useEffect(() => {
     if (slides.length <= 1) return;
@@ -17,7 +28,7 @@ export function Carousel({ interval = 4000, children }: { interval?: number; chi
   }, [slides.length, interval]);
 
   return (
-    <div className="carousel" data-anim="fade-up">
+    <div className={`carousel ${objectFit ? "carousel--fit" : ""}`} data-anim="fade-up" style={style}>
       {slides.map((slide, idx) => (
         <div key={idx} className={`carousel__slide ${idx === i ? "is-active" : ""}`} aria-hidden={idx !== i}>
           {slide}

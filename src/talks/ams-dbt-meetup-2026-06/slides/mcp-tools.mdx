@@ -1,0 +1,20 @@
+---
+template: top-title
+---
+
+### Wrap dbt into your MCP server
+# Six tools your agent actually needs.
+<Terminal title="mcp_memory/server.py">
+
+```python
+# mcp-memory-layer: dbt context, served as tools
+list_dbt_models(search)        # find models by name, description, column
+get_dbt_context(name, type)    # lineage, tests, description, owner
+get_model_sql(model_name)      # the compiled SQL behind a model
+get_popular_context(table)     # joins and filters people actually use
+get_corrections()              # known traps: units, stale tables, renames
+save_correction(note)          # write a new correction back to memory
+```
+
+</Terminal>
+<Callout box accent="sky">github.com/dumkydewilde/mcp-memory-layer</Callout>

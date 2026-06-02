@@ -1,0 +1,20 @@
+---
+template: top-title
+---
+
+# Context that ships with the data.
+<Terminal title="comments.sql">
+
+```sql
+COMMENT ON TABLE orders IS
+  'Clean orders mart. Amounts in EUROS. Use this, not raw_orders.';
+
+COMMENT ON TABLE daily_revenue IS
+  'STALE. Only 5 of 20 locations. Use orders instead.';
+
+COMMENT ON COLUMN orders.order_total IS
+  'Total in EUROS (subtotal + tax). Use for revenue.';
+```
+
+</Terminal>
+<Callout box accent="sky">Lives with the object. Every catalog-aware tool reads it. No prompt file to drift.</Callout>

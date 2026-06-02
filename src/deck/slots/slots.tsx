@@ -60,9 +60,11 @@ export const Center = (p: SlotProps) => <Region region="center" {...p} />;
  *   <Block image="dive-example-jobs.png" caption="Jobs explorer" />
  */
 export function Block({
-  icon, image, title, caption, align, color, children,
+  icon, illustration, image, title, caption, align, color, children,
 }: {
   icon?: string;
+  /** Contained illustration shown above the title (keeps the card frame, unlike `image`). */
+  illustration?: string;
   image?: string;
   title?: string;
   caption?: string;
@@ -86,6 +88,11 @@ export function Block({
   if (color) style.background = paletteVar(color);
   return (
     <div className="block-card" style={style}>
+      {illustration && (
+        <div className="block-illu">
+          <img src={`${import.meta.env.BASE_URL}${illustration}`} alt={title ?? ""} />
+        </div>
+      )}
       {icon && <Icon name={icon} size={80} />}
       {title && <div className="block-card__title">{title}</div>}
       {children && <div className="block-card__desc">{children}</div>}
