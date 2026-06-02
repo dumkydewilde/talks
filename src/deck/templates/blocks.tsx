@@ -10,7 +10,7 @@ const HEADER_MAP: SlotMap = {
   top: { className: "block-header", gridArea: "auto", style: { gridColumn: "1 / -1" } },
 };
 
-function BlockGrid({ children, n }: { children: React.ReactNode; n: 2 | 3 | 4 }) {
+function BlockGrid({ children, n }: { children: React.ReactNode; n: 2 | 3 | 4 | 5 }) {
   return (
     <SlotProvider value={HEADER_MAP}>
       <div className="block-stack">
@@ -20,6 +20,7 @@ function BlockGrid({ children, n }: { children: React.ReactNode; n: 2 | 3 | 4 })
   );
 }
 
+export const FiveBlock = ({ children }: TemplateProps) => <BlockGrid n={5}>{children}</BlockGrid>;
 export const FourBlock = ({ children }: TemplateProps) => <BlockGrid n={4}>{children}</BlockGrid>;
 export const ThreeBlock = ({ children }: TemplateProps) => <BlockGrid n={3}>{children}</BlockGrid>;
 export const TwoBlock = ({ children }: TemplateProps) => <BlockGrid n={2}>{children}</BlockGrid>;

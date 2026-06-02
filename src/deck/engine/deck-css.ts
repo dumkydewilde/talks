@@ -137,7 +137,7 @@ html, body, #root {
 .slide--ink .link-pill:hover { background: rgba(244,239,234,0.1); }
 
 /* ── Window chrome / code ── */
-.chrome { background: var(--white); border: 2px solid var(--ink); box-shadow: -8px 8px 0 var(--ink); border-radius: 2px; overflow: hidden; color: var(--ink); }
+.chrome { background: var(--white); border: 2px solid var(--ink); box-shadow: -8px 8px 0 var(--ink); border-radius: 2px; overflow: hidden; color: var(--ink); align-self: flex-end; text-align: left; max-width: 100%; }
 .chrome-titlebar { display: flex; align-items: center; gap: 12px; min-height: 46px; padding: 12px 16px; background: var(--sand); border-bottom: 2px solid var(--ink); }
 .chrome-dots { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
 .chrome-dot { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid var(--ink); flex-shrink: 0; }
@@ -146,7 +146,7 @@ html, body, #root {
 .chrome-dot--max   { background: var(--garden); }
 .chrome-title { font-family: var(--aeonik); font-weight: 400; font-size: clamp(12px, 1.1vw, 20px); letter-spacing: 0.04em; line-height: 1.2; text-transform: uppercase; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .chrome-body { background: var(--white); color: var(--ink); }
-.chrome-body--code { padding: clamp(16px, 2vw, 36px); font-family: var(--mono); font-size: clamp(14px, 1.3vw, 26px); line-height: 1.4; white-space: pre; overflow-x: auto; tab-size: 4; }
+.chrome-body--code { padding: clamp(16px, 2vw, 36px); font-family: var(--mono); font-size: clamp(14px, 1.3vw, 26px); line-height: 1.4; white-space: pre; overflow-x: auto; tab-size: 4; text-align: left; }
 
 /* ── Split frame (golden-split, half-and-half, left-title) ── full-bleed, edge to edge */
 .split-frame { position: relative; z-index: 1; flex: 1; width: 100%; height: 100%; min-height: 0; background: var(--sand); overflow: hidden; display: grid; }
@@ -162,6 +162,7 @@ html, body, #root {
 /* ── Block grids (four/three/two-block) ── */
 .block-stack { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: clamp(18px, 2.2vw, 38px); }
 .block-grid { display: grid; gap: clamp(14px, 1.6vw, 28px); }
+.block-grid--5 { grid-template-columns: repeat(5, 1fr); }
 .block-grid--4 { grid-template-columns: repeat(4, 1fr); }
 .block-grid--3 { grid-template-columns: repeat(3, 1fr); }
 .block-grid--2 { grid-template-columns: repeat(2, 1fr); }
@@ -179,6 +180,19 @@ html, body, #root {
 .stat { display: flex; flex-direction: column; align-items: center; gap: 0.4vw; }
 .stat__value { font-family: var(--aeonik); font-weight: 400; font-size: clamp(64px, min(15vw, 24vh), 200px); letter-spacing: -0.03em; line-height: 1.0; }
 .stat__label { font-family: var(--aeonik); font-size: clamp(13px, 1.1vw, 22px); letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
+
+/* ── Carousel ── auto-advancing image slideshow */
+.carousel { position: relative; width: 100%; flex: 1 1 auto; min-height: clamp(240px, 48vh, 600px); }
+.carousel__slide { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.6s ease; pointer-events: none; }
+.carousel__slide.is-active { opacity: 1; pointer-events: auto; }
+.carousel__slide > * { max-width: 100%; max-height: 100%; }
+.carousel__slide .block-card--image { width: 100%; height: 100%; min-height: 0; }
+.carousel__slide img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.carousel__dots { position: absolute; bottom: -28px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; }
+.carousel__dot { width: 11px; height: 11px; border-radius: 999px; border: 2px solid var(--ink); background: transparent; cursor: pointer; padding: 0; transition: background 0.2s ease; }
+.carousel__dot.is-active { background: var(--ink); }
+.slide--ink .carousel__dot { border-color: var(--sand); }
+.slide--ink .carousel__dot.is-active { background: var(--sand); }
 
 /* ── Image with chrome ── */
 .img-plain { display: block; max-width: 100%; max-height: 60vh; object-fit: contain; }

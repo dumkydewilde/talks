@@ -60,13 +60,15 @@ export const Center = (p: SlotProps) => <Region region="center" {...p} />;
  *   <Block image="dive-example-jobs.png" caption="Jobs explorer" />
  */
 export function Block({
-  icon, image, title, caption, align, children,
+  icon, image, title, caption, align, color, children,
 }: {
   icon?: string;
   image?: string;
   title?: string;
   caption?: string;
   align?: Align;
+  /** Card background: a palette name (watermelon, garden, sun, sky, …) or raw CSS color. */
+  color?: string;
   children?: React.ReactNode;
 }) {
   if (image) {
@@ -79,7 +81,9 @@ export function Block({
       </div>
     );
   }
-  const style = align ? { textAlign: align, alignItems: ALIGN_ITEMS[align] } as React.CSSProperties : undefined;
+  const style: React.CSSProperties = {};
+  if (align) { style.textAlign = align; style.alignItems = ALIGN_ITEMS[align]; }
+  if (color) style.background = paletteVar(color);
   return (
     <div className="block-card" style={style}>
       {icon && <Icon name={icon} size={80} />}

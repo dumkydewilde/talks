@@ -1,7 +1,7 @@
 // Template registry: frontmatter `template:` name → component + layout flags.
 import type { TemplateDef } from "./types";
 import { GoldenSplit, HalfAndHalf, LeftTitle } from "./splits";
-import { FourBlock, ThreeBlock, TwoBlock } from "./blocks";
+import { FiveBlock, FourBlock, ThreeBlock, TwoBlock } from "./blocks";
 import { CenterTitle, BigCenter, TopTitle } from "./prose";
 import { Title, FeatureImage } from "./images";
 
@@ -9,6 +9,7 @@ export const TEMPLATES: Record<string, TemplateDef> = {
   "golden-split": { Component: GoldenSplit, flush: true, scatter: false },
   "half-and-half": { Component: HalfAndHalf, flush: true, scatter: false },
   "left-title": { Component: LeftTitle, flush: true, scatter: false },
+  "five-block": { Component: FiveBlock },
   "four-block": { Component: FourBlock },
   "three-block": { Component: ThreeBlock },
   "two-block": { Component: TwoBlock },

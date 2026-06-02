@@ -13,6 +13,7 @@ import { Callout } from "./components/Callout";
 import { Stat } from "./components/Stat";
 import { Link } from "./components/Link";
 import { Rule } from "./components/Rule";
+import { Carousel } from "./components/Carousel";
 
 function langOf(className?: string): CodeLanguage {
   const m = /language-(\w+)/.exec(className ?? "");
@@ -40,5 +41,5 @@ export const MDX_COMPONENTS = {
   // slot vocabulary
   Left, Right, Top, Bottom, Center, Block,
   // component vocabulary
-  CodeBlock, Terminal, Chrome, Image, Icon, QR, Callout, Stat, Link, Rule,
+  CodeBlock, Terminal, Chrome, Image, Icon, QR, Callout, Stat, Link, Rule, Carousel,
 };
