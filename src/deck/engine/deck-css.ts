@@ -137,7 +137,7 @@ html, body, #root {
 .slide--ink .link-pill:hover { background: rgba(244,239,234,0.1); }
 
 /* ── Window chrome / code ── */
-.chrome { background: var(--white); border: 2px solid var(--ink); box-shadow: -8px 8px 0 var(--ink); border-radius: 2px; overflow: hidden; color: var(--ink); align-self: flex-end; text-align: left; max-width: 100%; }
+.chrome { background: var(--white); border: 2px solid var(--ink); box-shadow: -8px 8px 0 var(--ink); border-radius: 2px; overflow: hidden; color: var(--ink); text-align: left; width: 100%; max-width: 100%; }
 .chrome-titlebar { display: flex; align-items: center; gap: 12px; min-height: 46px; padding: 12px 16px; background: var(--sand); border-bottom: 2px solid var(--ink); }
 .chrome-dots { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
 .chrome-dot { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid var(--ink); flex-shrink: 0; }
@@ -179,7 +179,7 @@ html, body, #root {
 .block-card__caption { padding: clamp(8px,0.8vw,14px) clamp(12px,1.2vw,20px); border-top: 2px solid var(--ink); background: var(--sand); font-family: var(--aeonik); font-size: clamp(13px, 1.1vw, 20px); text-transform: uppercase; letter-spacing: 0.04em; }
 
 /* ── Callout / Stat ── */
-.callout { border: 2px solid var(--ink); border-left-width: 10px; background: var(--white); box-shadow: -7px 7px 0 var(--ink); padding: clamp(16px, 1.8vw, 32px); font-family: var(--inter); font-weight: 400; font-size: clamp(16px, 1.6vw, 26px); line-height: 1.4; }
+.callout { font-family: var(--inter); font-weight: 500; font-size: clamp(16px, 1.7vw, 28px); line-height: 1.35; }
 .stat { display: flex; flex-direction: column; align-items: center; gap: 0.4vw; }
 .stat__value { font-family: var(--aeonik); font-weight: 400; font-size: clamp(64px, min(15vw, 24vh), 200px); letter-spacing: -0.03em; line-height: 1.0; }
 .stat__label { font-family: var(--aeonik); font-size: clamp(13px, 1.1vw, 22px); letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }

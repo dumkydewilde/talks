@@ -67,10 +67,26 @@ const TOKEN_STYLES: Record<string, React.CSSProperties> = {
 
 export type CodeLanguage = "python" | "sql" | "log";
 
+// `log` is a transcript, not source: render inline markdown (**bold**, `code`)
+// while preserving whitespace, so prompts like "> **User**:" come out formatted.
+function renderLogMarkdown(src: string): React.ReactNode[] {
+  const nodes: React.ReactNode[] = [];
+  const re = /\*\*([^*]+)\*\*|`([^`]+)`/g;
+  let last = 0, m: RegExpExecArray | null, key = 0;
+  while ((m = re.exec(src))) {
+    if (m.index > last) nodes.push(src.slice(last, m.index));
+    if (m[1] !== undefined) nodes.push(<strong key={key++}>{m[1]}</strong>);
+    else nodes.push(<span key={key++} style={{ color: "#16AA98" }}>{m[2]}</span>);
+    last = re.lastIndex;
+  }
+  if (last < src.length) nodes.push(src.slice(last));
+  return nodes;
+}
+
 export function CodeBlock({ language = "log", code, children }: { language?: CodeLanguage; code?: string; children?: string }) {
   const src = (code ?? (typeof children === "string" ? children : "")).replace(/\n$/, "");
   const tokens = language === "python" ? tokenizePython(src) : language === "sql" ? tokenizeSql(src) : null;
-  if (!tokens) return <div className="chrome-body chrome-body--code">{src}</div>;
+  if (!tokens) return <div className="chrome-body chrome-body--code">{renderLogMarkdown(src)}</div>;
   return (
     <div className="chrome-body chrome-body--code">
       {tokens.map((t, i) => <span key={i} style={TOKEN_STYLES[t.kind]}>{t.text}</span>)}
