@@ -6,9 +6,9 @@ import { CenterTitle, BigCenter, TopTitle } from "./prose";
 import { Title, FeatureImage } from "./images";
 
 export const TEMPLATES: Record<string, TemplateDef> = {
-  "golden-split": { Component: GoldenSplit, scatter: false },
-  "half-and-half": { Component: HalfAndHalf, scatter: false },
-  "left-title": { Component: LeftTitle, scatter: false },
+  "golden-split": { Component: GoldenSplit, flush: true, scatter: false },
+  "half-and-half": { Component: HalfAndHalf, flush: true, scatter: false },
+  "left-title": { Component: LeftTitle, flush: true, scatter: false },
   "four-block": { Component: FourBlock },
   "three-block": { Component: ThreeBlock },
   "two-block": { Component: TwoBlock },

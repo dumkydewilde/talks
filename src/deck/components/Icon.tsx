@@ -1,5 +1,8 @@
-// Duck/brand icons, served from public/duck-icons. Usage: <Icon name="hybrid" size={80} />
+// Icons. Two sources:
+//   <Icon name="hybrid" />        → duck/brand SVG from public/duck-icons
+//   <Icon name="fa:linkedin" />   → Font Awesome glyph (react-icons), see fa-icons.tsx
 import * as React from "react";
+import { FA_ICONS } from "./fa-icons";
 
 const DUCK_ICONS: Record<string, string> = {
   extract: "duck-icons/extract.svg",
@@ -17,7 +20,15 @@ const DUCK_ICONS: Record<string, string> = {
   dives: "duck-icons/dives.svg",
 };
 
-export function Icon({ name, size = 80 }: { name: string; size?: number }) {
+export function Icon({ name, size = 80, color }: { name: string; size?: number; color?: string }) {
+  if (name.startsWith("fa:")) {
+    const Fa = FA_ICONS[name.slice(3)];
+    if (!Fa) {
+      if (import.meta.env.DEV) console.warn(`<Icon name="${name}"> not in the Font Awesome set.`);
+      return null;
+    }
+    return <Fa size={size} color={color} />;
+  }
   const src = DUCK_ICONS[name];
   if (!src) {
     if (import.meta.env.DEV) console.warn(`<Icon name="${name}"> not found in icon set.`);

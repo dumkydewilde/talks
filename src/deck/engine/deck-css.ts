@@ -129,6 +129,13 @@ html, body, #root {
 .prose code.inline { font-family: var(--mono); font-size: 0.85em; background: var(--code-header); border: 1px solid var(--rule); border-radius: 3px; padding: 0.05em 0.35em; }
 .prose strong { font-weight: 600; }
 
+/* Link pill: icon + text, used by <Link>. */
+.link-pill { display: inline-flex; align-items: center; gap: 0.5em; align-self: flex-start; font-family: var(--mono); font-size: clamp(13px, 1.05vw, 18px); color: var(--ink); text-decoration: none; padding: 0.4em 0.7em; border: 2px solid var(--ink); background: var(--white); line-height: 1; }
+.link-pill:hover { background: var(--sand); }
+.link-pill svg { flex-shrink: 0; }
+.slide--ink .link-pill { color: var(--sand); background: transparent; border-color: var(--sand); }
+.slide--ink .link-pill:hover { background: rgba(244,239,234,0.1); }
+
 /* ── Window chrome / code ── */
 .chrome { background: var(--white); border: 2px solid var(--ink); box-shadow: -8px 8px 0 var(--ink); border-radius: 2px; overflow: hidden; color: var(--ink); }
 .chrome-titlebar { display: flex; align-items: center; gap: 12px; min-height: 46px; padding: 12px 16px; background: var(--sand); border-bottom: 2px solid var(--ink); }
@@ -141,8 +148,8 @@ html, body, #root {
 .chrome-body { background: var(--white); color: var(--ink); }
 .chrome-body--code { padding: clamp(16px, 2vw, 36px); font-family: var(--mono); font-size: clamp(14px, 1.3vw, 26px); line-height: 1.4; white-space: pre; overflow-x: auto; tab-size: 4; }
 
-/* ── Split frame (golden-split, half-and-half, left-title) ── */
-.split-frame { position: relative; z-index: 1; flex: 1; width: 100%; min-height: 0; border: 2px solid var(--ink); background: var(--sand); overflow: hidden; display: grid; }
+/* ── Split frame (golden-split, half-and-half, left-title) ── full-bleed, edge to edge */
+.split-frame { position: relative; z-index: 1; flex: 1; width: 100%; height: 100%; min-height: 0; background: var(--sand); overflow: hidden; display: grid; }
 .split-panel { min-width: 0; min-height: 0; padding: clamp(34px, 5vw, 84px); display: flex; flex-direction: column; justify-content: center; gap: clamp(14px, 1.8vw, 28px); }
 .split-panel--center { align-items: center; text-align: center; }
 .split-panel--visual { padding: clamp(28px, 4vw, 70px); align-items: center; justify-content: center; }

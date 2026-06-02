@@ -24,34 +24,35 @@ export function SlotProvider({ value, children }: { value: SlotMap; children: Re
   return <SlotContext.Provider value={value}>{children}</SlotContext.Provider>;
 }
 
-function Region({ region, color, children }: { region: RegionName; color?: string; children: React.ReactNode }) {
+export type Align = "left" | "center" | "right";
+const ALIGN_ITEMS: Record<Align, React.CSSProperties["alignItems"]> = { left: "flex-start", center: "center", right: "flex-end" };
+
+type SlotProps = { children?: React.ReactNode; color?: string; align?: Align };
+
+function Region({ region, color, align, children }: SlotProps & { region: RegionName }) {
   const map = React.useContext(SlotContext);
   const cfg = map[region];
+  const alignStyle: React.CSSProperties = align ? { textAlign: align, alignItems: ALIGN_ITEMS[align] } : {};
   if (!cfg) {
     if (import.meta.env.DEV) console.warn(`<${region}> slot is not used by this template; rendering inline.`);
-    return <div className="prose stagger">{children}</div>;
+    return <div className="prose stagger" style={alignStyle}>{children}</div>;
   }
   const bg = color ? paletteVar(color) : undefined;
   return (
     <section
       className={`slot prose stagger ${cfg.className ?? ""}`}
-      style={{ gridArea: cfg.gridArea ?? region, ...(bg ? { background: bg } : null), ...cfg.style }}
+      style={{ gridArea: cfg.gridArea ?? region, ...(bg ? { background: bg } : null), ...cfg.style, ...alignStyle }}
     >
       {children}
     </section>
   );
 }
 
-export const Left = ({ children, color }: { children?: React.ReactNode; color?: string }) =>
-  <Region region="left" color={color}>{children}</Region>;
-export const Right = ({ children, color }: { children?: React.ReactNode; color?: string }) =>
-  <Region region="right" color={color}>{children}</Region>;
-export const Top = ({ children, color }: { children?: React.ReactNode; color?: string }) =>
-  <Region region="top" color={color}>{children}</Region>;
-export const Bottom = ({ children, color }: { children?: React.ReactNode; color?: string }) =>
-  <Region region="bottom" color={color}>{children}</Region>;
-export const Center = ({ children, color }: { children?: React.ReactNode; color?: string }) =>
-  <Region region="center" color={color}>{children}</Region>;
+export const Left = (p: SlotProps) => <Region region="left" {...p} />;
+export const Right = (p: SlotProps) => <Region region="right" {...p} />;
+export const Top = (p: SlotProps) => <Region region="top" {...p} />;
+export const Bottom = (p: SlotProps) => <Region region="bottom" {...p} />;
+export const Center = (p: SlotProps) => <Region region="center" {...p} />;
 
 /**
  * One card in a block grid. Two shapes:
@@ -59,12 +60,13 @@ export const Center = ({ children, color }: { children?: React.ReactNode; color?
  *   <Block image="dive-example-jobs.png" caption="Jobs explorer" />
  */
 export function Block({
-  icon, image, title, caption, children,
+  icon, image, title, caption, align, children,
 }: {
   icon?: string;
   image?: string;
   title?: string;
   caption?: string;
+  align?: Align;
   children?: React.ReactNode;
 }) {
   if (image) {
@@ -77,8 +79,9 @@ export function Block({
       </div>
     );
   }
+  const style = align ? { textAlign: align, alignItems: ALIGN_ITEMS[align] } as React.CSSProperties : undefined;
   return (
-    <div className="block-card">
+    <div className="block-card" style={style}>
       {icon && <Icon name={icon} size={80} />}
       {title && <div className="block-card__title">{title}</div>}
       {children && <div className="block-card__desc">{children}</div>}

@@ -11,6 +11,8 @@ import { Icon } from "./components/Icon";
 import { QR } from "./components/QR";
 import { Callout } from "./components/Callout";
 import { Stat } from "./components/Stat";
+import { Link } from "./components/Link";
+import { Rule } from "./components/Rule";
 
 function langOf(className?: string): CodeLanguage {
   const m = /language-(\w+)/.exec(className ?? "");
@@ -26,7 +28,7 @@ export const MDX_COMPONENTS = {
   p: (p: any) => <div className="body-md" data-anim="fade-up" {...p} />,
   ul: (p: any) => <ul data-anim="fade-up" {...p} />,
   a: (p: any) => <a target="_blank" rel="noreferrer" {...p} />,
-  hr: () => <div className="accent-rule" data-anim="grow-x" />,
+  hr: () => <Rule />,
   blockquote: (p: any) => <Callout {...p} />,
   // inline vs fenced code
   code: (p: any) => <code className="inline" {...p} />,
@@ -38,5 +40,5 @@ export const MDX_COMPONENTS = {
   // slot vocabulary
   Left, Right, Top, Bottom, Center, Block,
   // component vocabulary
-  CodeBlock, Terminal, Chrome, Image, Icon, QR, Callout, Stat,
+  CodeBlock, Terminal, Chrome, Image, Icon, QR, Callout, Stat, Link, Rule,
 };
