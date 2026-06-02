@@ -1,0 +1,27 @@
+---
+template: golden-split
+ratio: 1/3-2/3
+---
+
+<Left>
+### The catch
+# The agent found the column. It missed the unit.
+In the raw source, `order_total` is stored in cents. The dbt mart is where the useful business value gets normalized.
+</Left>
+
+<Right>
+<Terminal title="models/marts/orders.sql">
+
+```sql
+-- raw_orders
+avg(order_total) = 16,990.42   -- cents
+
+-- dbt mart
+avg(order_total) / 100.0
+= 169.9042                    -- euros
+```
+
+</Terminal>
+
+<Callout accent="sun">conversion · 16,990.42 / 100 = €169.90</Callout>
+</Right>

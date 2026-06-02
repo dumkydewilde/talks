@@ -1,0 +1,19 @@
+---
+template: top-title
+---
+
+# "What's the average order value?"
+
+<Terminal title="agent.log">
+
+```log
+> User:   What's the average order value?
+
+> Agent:  SELECT avg(order_total) FROM raw_orders;
+
+> Result: 16,990.42
+```
+
+</Terminal>
+
+<Callout accent="watermelon">Looks plausible. That is the problem.</Callout>
