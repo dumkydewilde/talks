@@ -26,6 +26,7 @@ export default defineConfig({
         index: resolve(__dirname, "index.html"),
         "infrastructure-for-answers": resolve(__dirname, "infrastructure-for-answers/index.html"),
         "ams-dbt-meetup-2026-06": resolve(__dirname, "ams-dbt-meetup-2026-06/index.html"),
+        "vibe-coding-weekend-2026-08": resolve(__dirname, "vibe-coding-weekend-2026-08/index.html"),
       },
     },
   },

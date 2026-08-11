@@ -13,10 +13,13 @@ const TITLE_MAP: SlotMap = {
 
 export function Title({ fm, children }: TemplateProps) {
   const image = fm.image as string | undefined;
+  // Busy hero images (screenshots, dense illustrations) need a darker scrim than the
+  // 0.66 default to keep the headline readable; `scrim: 0.86` in frontmatter tunes it.
+  const scrim = typeof fm.scrim === "number" ? fm.scrim : undefined;
   return (
     <>
       {image && <img className="title-image" src={`${import.meta.env.BASE_URL}${image}`} alt="" />}
-      <div className="title-scrim" />
+      <div className="title-scrim" style={scrim !== undefined ? { background: `rgba(21, 31, 34, ${scrim})` } : undefined} />
       <SlotProvider value={TITLE_MAP}>
         <div className="title-grid" style={{ gridTemplateAreas: '"main qr"' }}>{children}</div>
       </SlotProvider>

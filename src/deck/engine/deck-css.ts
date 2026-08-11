@@ -259,6 +259,22 @@ html, body, #root {
 .qr-card { background: var(--white); border: 2px solid var(--ink); box-shadow: -8px 8px 0 var(--ink); color: var(--ink); display: flex; flex-direction: column; gap: 12px; padding: clamp(16px, 1.6vw, 26px); align-items: center; text-align: center; }
 .qr-card svg, .qr-card img { width: min(18vw, 220px); height: auto; aspect-ratio: 1 / 1; display: block; margin: 0 auto; }
 
+/* ── Mermaid diagram ── */
+.mermaid-wrap { display: flex; flex-direction: column; gap: clamp(10px, 1.2vw, 18px); width: 100%; align-items: center; }
+.mermaid-wrap--with-code { display: grid; grid-template-columns: minmax(0, 1.9fr) minmax(0, 1fr); align-items: center; gap: clamp(18px, 2vw, 34px); }
+.mermaid-figure { display: flex; align-items: center; justify-content: center; width: 100%; min-width: 0; }
+.mermaid-svg { width: 100%; display: flex; justify-content: center; }
+.mermaid-svg svg { width: 100%; max-width: 100%; height: auto; max-height: 52vh; }
+/* Mermaid draws node borders at 1px; thicken them to match the brutalist frames. */
+.mermaid-svg .node rect, .mermaid-svg .node circle, .mermaid-svg .node polygon,
+.mermaid-svg .node path, .mermaid-svg .cluster rect { stroke-width: 2px; }
+.mermaid-svg .edgePath .path, .mermaid-svg .flowchart-link { stroke-width: 2px; }
+.mermaid-placeholder { min-height: clamp(180px, 30vh, 340px); display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 13px; color: var(--muted); }
+.mermaid-source { margin: 0; background: var(--ink); color: var(--sand); border: 2px solid var(--ink); box-shadow: -8px 8px 0 var(--muted-dark); padding: clamp(14px, 1.4vw, 22px); font-family: var(--mono); font-size: clamp(11px, 0.95vw, 15px); line-height: 1.65; white-space: pre; overflow: hidden; text-align: left; }
+.mermaid-caption { font-family: var(--mono); font-size: clamp(11px, 0.9vw, 14px); color: var(--muted); text-align: center; }
+.mermaid-wrap--with-code .mermaid-caption { grid-column: 1 / -1; }
+.slide--ink .mermaid-source { border-color: var(--muted-dark); box-shadow: -8px 8px 0 rgba(0,0,0,0.35); }
+
 /* ── Single-region template wrappers ── */
 .tmpl-center { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: clamp(16px, 2vw, 34px); text-align: center; }
 .tmpl-top { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: clamp(16px, 2vw, 32px); }
