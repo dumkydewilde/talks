@@ -1,0 +1,28 @@
+---
+template: half-and-half
+---
+
+<Left>
+### Same model, different front door
+# Where it runs decides what it can touch.
+A browser tab, an app on your laptop, a machine in the cloud picking up a ticket: the model behind all three is the same. What changes is the room it wakes up in. Which files it can see, which MCP servers are plugged in, what it is allowed to run without asking.
+
+This is why the same assistant feels like three different products, and why the answer to "why can't it do that here?" is almost always the door, not the model.
+
+<Callout box accent="watermelon" label="Rule of thumb" title="Ask whose computer it is on.">Everything else, files, tools, permissions, memory, follows from that one answer.</Callout>
+</Left>
+
+<Right>
+<Mermaid caption="Same question, three rooms." chart={`
+flowchart LR
+  B[Browser tab] --> B1[No files of yours.<br/>Only what you clicked on.]
+  L[Your laptop] --> L1[Your folder, your keys,<br/>your terminal, your mess.]
+  C[Cloud machine] --> C1[A copy of the project.<br/>Runs while you sleep.]
+  style B fill:#6FC2FF
+  style L fill:#FFDE00
+  style C fill:#16AA98
+  style B1 fill:#FFFFFF
+  style L1 fill:#FFFFFF
+  style C1 fill:#FFFFFF
+`} />
+</Right>
