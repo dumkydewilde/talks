@@ -1,0 +1,20 @@
+---
+template: golden-split
+ratio: 1/3-2/3
+---
+
+<Left>
+### Upgrade one: say more
+# Same model, much better answer.
+Nothing about the model changed. You just stopped making it guess: what the data looks like, what you want back, who is going to look at it.
+
+<Callout box accent="sun" title="This is the whole of prompt engineering.">Almost every bad answer you get this weekend is a missing sentence, not a stupid model.</Callout>
+</Left>
+
+<Right>
+<ChatTerminal title="the same question, with context" inputPlaceholder="Here are the first five rows, and what I want back">
+  <ChatBubble role="user">First 5 rows of expenses.csv are below. Amounts are in cents, dates are dd-mm-yyyy. Give me one page: total per month, biggest category on top.</ChatBubble>
+  <ChatBubble role="agent">Right. A table per month, sorted by category total, amounts divided by 100.</ChatBubble>
+  <ChatBubble role="result">Same model. You handed it the missing sentence.</ChatBubble>
+</ChatTerminal>
+</Right>

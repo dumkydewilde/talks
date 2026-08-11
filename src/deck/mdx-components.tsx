@@ -15,6 +15,8 @@ import { Link } from "./components/Link";
 import { Rule } from "./components/Rule";
 import { Carousel } from "./components/Carousel";
 import { LoopDiagram } from "./components/LoopDiagram";
+import { Mermaid } from "./components/Mermaid";
+import { AgentLoop } from "./components/AgentLoop";
 import { DumbbellChart } from "./components/DumbbellChart";
 import { OptimizationTriangle } from "./components/OptimizationTriangle";
 
@@ -45,5 +47,5 @@ export const MDX_COMPONENTS = {
   Left, Right, Top, Bottom, Center, Block,
   // component vocabulary
   CodeBlock, Terminal, Chrome, ChatTerminal, ChatBubble, Image, Icon, QR, Callout, Stat, Link, Rule, Carousel,
-  LoopDiagram, DumbbellChart, OptimizationTriangle,
+  LoopDiagram, AgentLoop, Mermaid, DumbbellChart, OptimizationTriangle,
 };

@@ -143,6 +143,9 @@ Common fields:
 - `leftColor`, `rightColor`: panel colors for split templates.
 - `image`: full-bleed image for image templates.
 - `imagePosition`: CSS object-position for image templates when needed.
+- `scrim`: darkness of the `title` template's overlay, `0`–`1` (default `0.66`). Raise it
+  to around `0.88` when the hero image is a busy screenshot, or the headline competes
+  with text in the image.
 
 Palette names used across the framework: `sand`, `ink`, `white`, `sky`, `sun`,
 `garden`, `watermelon`, `duck`.
@@ -208,6 +211,10 @@ not import them.
 - `<Rule accent>`: short colored accent rule. Markdown `---` maps to this.
 - `<Carousel interval objectFit>`: auto-advancing carousel around child slides/images.
 - `<LoopDiagram interval>`: animated agentic-loop diagram.
+- `<Mermaid chart code caption maxWidth>`: Mermaid diagram rendered to SVG at load time,
+  themed to the brand palette. `chart` is the diagram text; add `code` to show the source
+  beside the picture. Mermaid is ~500 kB and is imported dynamically, so decks that never
+  use this component never download it.
 - `<DumbbellChart rows min max unit deltaUnit startLabel endLabel accent ticks>`:
   before/after dumbbell chart with sensible defaults.
 - `<OptimizationTriangle vertices center>`: three-way trade-off diagram.

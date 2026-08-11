@@ -1,0 +1,18 @@
+---
+template: top-title
+---
+
+### Ask for a diagram, get a diagram
+# Text in. Diagram out.
+
+<Mermaid code caption="Nobody drew this. It is regenerated from those eight lines every time the slide loads." chart={`
+flowchart LR
+  A[Annoying thing] --> B[Small version]
+  B --> C{Works?}
+  C -- no --> B
+  C -- yes --> D[Show a friend]
+  D --> E[One more thing]
+  E --> B
+  style A fill:#FFDE00
+  style D fill:#16AA98
+`} />
