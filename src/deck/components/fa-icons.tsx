@@ -8,6 +8,7 @@ import {
   FaArrowUpRightFromSquare, FaEnvelope, FaDatabase, FaCode, FaBook,
   FaFilePdf, FaCheck, FaArrowRight, FaRss,
   FaBrain, FaSitemap, FaDiagramProject, FaWaveSquare, FaListCheck,
+  FaTerminal, FaPlug, FaShieldHalved, FaLaptop, FaCloud,
 } from "react-icons/fa6";
 
 export type IconComponent = React.ComponentType<{ size?: number | string; color?: string }>;
@@ -36,6 +37,11 @@ export const FA_ICONS: Record<string, IconComponent> = {
   "wave-square": FaWaveSquare,
   traces: FaWaveSquare,
   "list-check": FaListCheck,
+  terminal: FaTerminal,
+  plug: FaPlug,
+  shield: FaShieldHalved,
+  laptop: FaLaptop,
+  cloud: FaCloud,
 };
 
 /** Pick a brand/link icon from a URL host. Falls back to a generic external-link glyph. */

@@ -1,0 +1,30 @@
+---
+template: golden-split
+ratio: 1/3-2/3
+---
+
+<Left>
+### Upgrade three: borrowed tools
+# MCP is a plug socket for tools.
+Nobody wants to write the code that talks to Gmail, or a browser, or a database. An MCP server is a small program that already does it and offers it to the agent as a list of tools: here is what I can do, here is what I need from you. One standard plug shape, so the same server works in whatever you use next month.
+
+Plug in ten and it has a hundred tools to wade through before it starts. Keep the key ring small.
+
+<Callout accent="sky">You are not adding intelligence. You are handing it a key ring.</Callout>
+</Left>
+
+<Right>
+<Terminal title="three servers plugged in, nine new tools" footerLabel="the catch" footer="It reads every tool, every time." footerColor="watermelon">
+
+```
+> /mcp
+  filesystem    read_file · write_file · list_dir
+  playwright    open_page · click · screenshot
+  gmail         search_mail · draft · send
+
+> search_mail("invoices from March")
+  ok · 11 threads
+```
+
+</Terminal>
+</Right>
