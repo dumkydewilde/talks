@@ -1,0 +1,20 @@
+{
+  "name": "helsinki-data-week-2026",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "slidev --port 3030",
+    "build": "slidev build",
+    "preview": "vite preview --port 3031",
+    "test": "node --test tests/*.test.mjs",
+    "pretest:ui": "npm run build",
+    "test:ui": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1",
+    "@slidev/cli": "53.0.0",
+    "qrcode": "^1.5.4",
+    "vite": "^8.3.5",
+    "vue": "^3.5.0"
+  }
+}

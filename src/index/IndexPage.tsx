@@ -77,6 +77,12 @@ type Talk = {
 
 const talks: Talk[] = [
   {
+    slug: "helsinki-data-week-2026",
+    title: "The Future of Data Teams",
+    eyebrow: "Helsinki Data Week · October 2026",
+    subtitle: "New tools, new workflows, and the interview-insights demo from the MotherDuck workbench.",
+  },
+  {
     slug: "vibe-coding-weekend-2026-08",
     title: "You Can Just Make Things",
     eyebrow: "Weekend session with friends · August 2026",
