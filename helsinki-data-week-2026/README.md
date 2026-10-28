@@ -43,6 +43,7 @@ npm run dev
 - `public/examples/`: locally bundled screenshots, so the deck doesn’t depend on a live dashboard.
 - `lib/dive-gallery.mjs`: the nine favourite Dives, capability notes, public links, and screenshot provenance.
 - `public/gallery/`: optimized local copies of the public gallery screenshots.
+- `scripts/generate-follow-along.mjs`: regenerate the local QR SVG after changing the follow-along URL.
 
 ### Before presenting
 

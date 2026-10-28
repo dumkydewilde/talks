@@ -6,6 +6,7 @@
     "dev": "slidev --port 3030",
     "build": "slidev build",
     "preview": "vite preview --port 3031",
+    "generate:qr": "node scripts/generate-follow-along.mjs",
     "test": "node --test tests/*.test.mjs",
     "pretest:ui": "npm run build",
     "test:ui": "playwright test"
