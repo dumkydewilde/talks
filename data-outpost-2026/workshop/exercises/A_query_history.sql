@@ -1,60 +1,71 @@
 -- Exercise A · What does Duckoffee's warehouse actually do all day?
 --
--- Your warehouse has been quietly writing a diary: every query, who ran it, when, and which
--- tables it touched. Read the diary. Three questions:
---   1. Loading patterns: what gets loaded, by whom, and how often?
---   2. Lineage: which table feeds which?
---   3. Dead ends: which tables does nobody (and nothing) ever read?
--- Then put it all in a Dive.
+-- Your warehouse has been quietly writing a diary: every query, who ran it, when, what it cost,
+-- and which tables it touched. Seven months of it (2025-09-01 → 2026-03-31). Read the diary.
 --
--- Tables (a simplified Snowflake ACCOUNT_USAGE export):
---   account_usage.query_history    one row per query: text, type, user, warehouse, query_tag, timing
---   account_usage.access_history   one row per query: which tables it read and which it wrote
---   account_usage.tables           every table, its size and type
+-- Attach the old warehouse (a public share, a synthetic Snowflake ACCOUNT_USAGE + dbt export):
+ATTACH IF NOT EXISTS 'md:_share/dg_devtools_duckoffee_warehouse_lineage_s_bae5bc27_r1/dbcfb372-fef8-4d92-b997-26254d727cd0'
+  AS devtools_duckoffee_warehouse_lineage;
+USE devtools_duckoffee_warehouse_lineage;
 --
--- Prefer to let an agent do the typing? Every step has a prompt you can paste into the
--- MotherDuck MCP server. The SQL is here for when the agent gets creative.
+-- Tables:
+--   query_history            one row per query: text, type, user, warehouse, query_tag, timing, status
+--   query_metering_history   credits per query (join on query_id)
+--   access_history           per query: JSON arrays of tables read (base_objects_accessed) and written (objects_modified)
+--   account_tables           every table: owner, type, size, and the dbt node in `comment`
+--   dbt_models, dbt_run_results, dbt_invocations, dbt_exposures   the dbt side of the story
+--
+-- Three questions:
+--   1. Loading patterns: what runs when, and has that changed?
+--   2. Lineage: which table feeds which, and does that match what dbt says?
+--   3. Dead ends: what does nobody read, and what is read but no longer exists?
+-- Every step has an agent prompt for the MotherDuck MCP server. The SQL is there for when the agent gets creative.
 
 -- A1. Loading patterns. Who writes, what kind of statement, and at what time of day?
---     Agent: "From account_usage.query_history, show me per user_name and query_type how many
---             write queries (anything but SELECT) ran per day on average, and at which hours."
+--     Agent: "From query_history, show per user_name and query_type how many non-SELECT queries
+--             ran per day, and at which hours of the day."
 SELECT
   user_name,
+  warehouse_name,
   query_type,
-  count(*)                                   AS queries,
-  round(count(*) / count(DISTINCT start_time::DATE), 1) AS per_active_day,
+  count(*)                                                AS queries,
+  round(count(*) / count(DISTINCT start_time::DATE), 1)  AS per_active_day,
   list(DISTINCT hour(start_time) ORDER BY hour(start_time)) AS hours_of_day
-FROM account_usage.query_history
+FROM query_history
 WHERE query_type <> 'SELECT'
 GROUP BY ALL
 ORDER BY queries DESC;
 
--- A1b. TODO: same question per *table* instead of per user. Unnest objects_modified from
---      access_history and count writes per table per day. Which tables load hourly, which
---      nightly, and which only once a month? (Hint: count(DISTINCT start_time::DATE).)
+-- A1b. TODO: when does the nightly dbt build finish? Use dbt_invocations (run_started_at,
+--      run_completed_at) and group by week or month. Something changed. When, and which model
+--      is to blame? (Hint: dbt_run_results.execution_time per model, before and after.)
+--      Then: the Looker franchisee_morning_sales dashboard is read between 06:30 and 08:00.
+--      How often did franchisees look at yesterday's data?
 
--- A2. Lineage. access_history already knows which tables a write query read from.
---     Agent: "Build a table-level lineage graph from account_usage.access_history
---             (base_objects_accessed → objects_modified) and draw it as Mermaid."
-SELECT DISTINCT b.objectName AS source, m.objectName AS target
-FROM account_usage.access_history,
-     unnest(objects_modified)      AS u(m),
-     unnest(base_objects_accessed) AS v(b)
-WHERE b.objectName <> m.objectName
-ORDER BY ALL;
+-- A2. Lineage. access_history knows which tables every write query read from.
+--     Agent: "Build a table-level lineage graph from access_history (base_objects_accessed →
+--             objects_modified, both JSON arrays) and draw it as Mermaid."
+SELECT DISTINCT
+  unnest(json_extract_string(base_objects_accessed, '$[*].objectName')) AS source,
+  json_extract_string(objects_modified, '$[0].objectName')             AS target
+FROM access_history
+WHERE objects_modified <> '[]'
+ORDER BY target, source;
 
--- A2b. TODO: try to get the same edges by parsing query_history.query_text instead
---      (regexp_extract_all on "from|join <db>.<schema>.<table>"). Which edges are missing?
---      Look at the query_type of the writes that went missing. Why can't text parsing see them?
+-- A2b. TODO: compare with what dbt declares. dbt_models.depends_on_nodes lists the declared
+--      parents, dbt_exposures lists the declared consumers (exposure name = query_tag).
+--      Which observed reads are not declared anywhere? Look at both dbt models and consumers
+--      (LOOKER_SVC, BI_TOOL_B_SVC, DATA_APP_SVC). Bonus: the stored procedures (query_type CALL)
+--      read RAW tables, but where do they write?
 
--- A3. TODO: Dead ends. A table is a dead end when nothing reads it: no downstream table and no
---     person, dashboard or app. Start from account_usage.tables and anti-join everything that
---     shows up in base_objects_accessed. Then split them up:
---       - written but never read  → you are paying to load it for nobody
---       - not written, not read   → leave it behind (after asking around)
---       - not written, still read → careful: somebody depends on a table nothing updates
+-- A3. TODO: Dead ends, in both directions.
+--   - Marts (database MARTS) that nothing except dbt has read since 2026-01-01.
+--     How many, and what share of TRANSFORM_WH credits do they cost to build?
+--   - Tables that are read, but no longer exist. account_tables.deleted tells you what was dropped,
+--     query_history.execution_status and error_message tell you who noticed.
 
 -- A4. Make it a Dive. Prompt suggestion:
---     "Build a Dive over account_usage in <your database>. Show (1) a heatmap of write queries
---      by hour of day and user_name, (2) the table lineage as a graph, coloured by schema,
---      and (3) a list of dead-end tables with their size in GB and last write."
+--     "Build a Dive over devtools_duckoffee_warehouse_lineage. Show (1) nightly dbt completion time
+--      per week with the 06:30 dashboard deadline as a line, (2) the table lineage as a graph with
+--      undeclared edges in red, and (3) a list of dead-end marts with their build credits and the
+--      dropped table that is still being queried."

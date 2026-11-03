@@ -1,147 +1,125 @@
--- Facilitator solutions. A and B run against the generated duckoffee_legacy database
--- (generate.sql), C against the public duckoffee share, bonus 1 and 2 against duckoffee_legacy.
+-- Facilitator solutions.
+--   A and B: the DuckGen share   USE devtools_duckoffee_warehouse_lineage;
+--   C:       the duckoffee share USE duckoffee;
+--   Bonus:   generate.sql        USE duckoffee_legacy;
+-- Numbers below are from release 20261103-bae5bc27-s-r1. A few A queries are DuckGen's own
+-- answer queries (guide.md next to the release manifest); their published answer keys match.
 
--- ── A · Query history: loading patterns ──────────────────────────────────────
--- Write cadence per table. Hourly: Fivetran + Snowpipe. Nightly: Airbyte, dbt, Airflow.
--- Monthly: the hand-uploaded FX rates and the board pack procedure, both on the 1st.
-WITH w AS (
-  SELECT m.objectName AS fqn, a.query_start_time AS t
-  FROM account_usage.access_history a, unnest(a.objects_modified) AS u(m)
-)
-SELECT fqn, count(*) AS writes, count(DISTINCT t::DATE) AS active_days,
-  CASE WHEN count(*) / count(DISTINCT t::DATE) >= 12 THEN 'hourly'
-       WHEN count(DISTINCT t::DATE) >= 60 THEN 'daily'
-       WHEN count(DISTINCT t::DATE) <= 4 THEN 'monthly or ad hoc' ELSE 'irregular' END AS pattern
-FROM w GROUP BY 1 ORDER BY pattern, fqn;
+-- ── A1 · Loading patterns ────────────────────────────────────────────────────
+-- Nightly rhythm: TASK_SVC runs two stored procedures at 01:00, DBT_SVC builds from 02:00 to ~05:30.
+-- Then on 2026-02-02 the build starts finishing at ~07:30: fct_ticket_lines went from ~4 to ~50
+-- minutes and from 0.4M to 120M+ rows per run. A broken is_incremental filter rebuilds it in full
+-- every night while full_refresh stays false.
+WITH inv AS (
+  SELECT date_trunc('month', run_started_at)::DATE AS month,
+    strftime(to_timestamp(avg(epoch(run_completed_at) - epoch(run_completed_at::DATE)))::TIMESTAMP, '%H:%M') AS avg_completed
+  FROM dbt_invocations GROUP BY 1),
+tl AS (
+  SELECT date_trunc('month', execute_started_at)::DATE AS month,
+    round(avg(execution_time) / 60, 1) AS fct_ticket_lines_minutes, round(avg(rows_affected) / 1e6, 1) AS million_rows_per_run
+  FROM dbt_run_results WHERE name = 'fct_ticket_lines' GROUP BY 1)
+SELECT * FROM inv JOIN tl USING (month) ORDER BY month;
 
--- ── A · Query history: dead ends ────────────────────────────────────────────
--- Four dead ends: two scratch tables written once and never read (15 GB backup!), and two old
--- tables nobody writes or reads.
-WITH t AS (SELECT table_catalog || '.' || table_schema || '.' || table_name AS fqn, round(bytes / 1e9, 1) AS gb FROM account_usage.tables),
-reads AS (SELECT DISTINCT o.objectName AS fqn FROM account_usage.access_history, unnest(base_objects_accessed) AS u(o)),
-writes AS (SELECT m.objectName AS fqn, max(query_start_time) AS last_write FROM account_usage.access_history, unnest(objects_modified) AS u(m) GROUP BY 1)
-SELECT t.fqn, t.gb, w.last_write,
-  CASE WHEN w.fqn IS NOT NULL THEN 'written but never read' ELSE 'not written, not read' END AS dead_end
-FROM t ANTI JOIN reads r USING (fqn) LEFT JOIN writes w USING (fqn)
-ORDER BY dead_end, gb DESC;
+-- Who notices: franchisees open the morning-sales dashboard between 06:30 and 08:00. From
+-- 2026-02-02 roughly 70% of those reads start before the nightly build has finished: stale data.
+SELECT date_trunc('week', q.start_time)::DATE AS week, count(*) AS morning_reads,
+  sum((q.start_time < i.run_completed_at)::INTEGER) AS stale_reads,
+  round(100.0 * avg((q.start_time < i.run_completed_at)::INTEGER), 1) AS stale_pct,
+  strftime(to_timestamp(avg(epoch(i.run_completed_at) - epoch(i.run_completed_at::DATE)))::TIMESTAMP, '%H:%M') AS avg_nightly_completion
+FROM query_history q JOIN dbt_invocations i ON i.run_started_at::DATE = q.start_time::DATE
+WHERE q.query_tag = 'franchisee_morning_sales' AND strftime(q.start_time, '%H:%M') >= '06:30' AND strftime(q.start_time, '%H:%M') < '08:00'
+  AND q.start_time >= TIMESTAMP '2026-01-05'
+GROUP BY 1 ORDER BY 1;
 
--- The opposite trap: read, but nothing writes it. A Google Sheet still reads FCT_ORDERS_V1 every Monday.
-WITH reads AS (SELECT DISTINCT o.objectName AS fqn, user_name FROM account_usage.access_history, unnest(base_objects_accessed) AS u(o)),
-writes AS (SELECT DISTINCT m.objectName AS fqn FROM account_usage.access_history, unnest(objects_modified) AS u(m))
-SELECT fqn, list(DISTINCT user_name) AS readers FROM reads ANTI JOIN writes USING (fqn) WHERE fqn NOT LIKE 'RAW.%' GROUP BY 1;
+-- ── A2 · Lineage: observed vs declared ──────────────────────────────────────
+-- 14 observed reads that dbt doesn't declare. The big ones:
+--   - marketing_campaigns (Looker) reads RAW_ADS and RAW_LOYALTY directly through PDT SQL,
+--     instead of fct_campaign_daily (since 2025-11-17: cache hits drop, queries triple in cost)
+--   - cafe_ops, a data app with no exposure at all, polls three marts every 30 s since 2026-03-02
+--   - royalty_statements still reads RAW_POS.PUBLIC.TICKETS, which was replaced by RAW_POS_V2
+--   - dbt model stg_src_09 reads a Looker PDT (LR$MKT_CAMPAIGN_PDT). dbt depends on the BI tool.
+-- Also: the two stored procedures read RAW_LOYALTY / RAW_POS but access_history records no write
+-- target for them. Their output is invisible to lineage built from objects_modified.
+WITH a AS (
+  SELECT a.query_id, a.query_start_time, a.user_name, unnest(json_extract_string(a.base_objects_accessed, '$[*].objectId'))::INTEGER AS table_id
+  FROM access_history a WHERE a.query_start_time >= TIMESTAMP '2026-01-01'),
+o AS (SELECT table_id, table_catalog || '.' || table_schema || '.' || table_name AS object_name, replace(comment, 'dbt node ', '') AS node_uid FROM account_tables),
+obs AS (
+  SELECT 'dbt model ' || d.name AS reader, o.object_name, d.depends_on_nodes LIKE '%"' || o.node_uid || '"%' AS declared, count(*) AS reads_90d
+  FROM a JOIN dbt_run_results r USING (query_id) JOIN dbt_models d USING (unique_id) JOIN o USING (table_id)
+  WHERE o.object_name <> d.database_name || '.' || d.schema_name || '.' || upper(d.name) GROUP BY ALL
+  UNION ALL
+  SELECT 'consumer ' || q.query_tag, o.object_name, coalesce(e.depends_on_nodes LIKE '%"' || o.node_uid || '"%', false), count(*)
+  FROM a JOIN query_history q USING (query_id) JOIN o USING (table_id) LEFT JOIN dbt_exposures e ON e.name = q.query_tag
+  WHERE q.user_name IN ('LOOKER_SVC', 'BI_TOOL_B_SVC', 'DATA_APP_SVC') GROUP BY ALL)
+SELECT reader, object_name, reads_90d FROM obs WHERE NOT declared ORDER BY reads_90d DESC, reader, object_name;
 
--- ── A · Query history: lineage ───────────────────────────────────────────────
-CREATE OR REPLACE TABLE lineage_from_text AS
-WITH parsed AS (
-  SELECT DISTINCT
-    upper(regexp_extract(lower(query_text), '(?:table|view|into)\s+([a-z_0-9]+\.[a-z_0-9]+\.[a-z_0-9]+)', 1)) AS target,
-    upper(unnest(regexp_extract_all(lower(query_text), '(?:from|join)\s+([a-z_0-9]+\.[a-z_0-9]+\.[a-z_0-9]+)', 1))) AS source
-  FROM account_usage.query_history
-  WHERE query_type <> 'SELECT'
-)
-SELECT source, target FROM parsed
-WHERE target <> '' AND source <> target
-  AND source IN (SELECT table_catalog || '.' || table_schema || '.' || table_name FROM account_usage.tables);
+-- ── A3 · Dead ends ──────────────────────────────────────────────────────────
+-- 8 of 32 marts (FCT_MART_53 … FCT_MART_60) have no reads outside dbt since 2026-01-01.
+-- They cost 64.88 credits to build in that period: 6.4% of TRANSFORM_WH. Don't move them.
+WITH reads AS (
+  SELECT DISTINCT unnest(json_extract_string(base_objects_accessed, '$[*].objectId'))::INTEGER AS table_id FROM access_history
+  WHERE user_name <> 'DBT_SVC' AND query_start_time >= TIMESTAMP '2026-01-01'),
+marts AS (
+  SELECT d.unique_id, t.table_name, t.table_id IN (SELECT table_id FROM reads) AS read_outside_dbt
+  FROM dbt_models d JOIN account_tables t ON t.comment = 'dbt node ' || d.unique_id WHERE d.database_name = 'MARTS'),
+cost AS (
+  SELECT r.unique_id, sum(m.credits_used_compute::DECIMAL(18, 6)) AS credits FROM dbt_run_results r JOIN query_metering_history m USING (query_id)
+  WHERE m.start_time >= TIMESTAMP '2026-01-01' GROUP BY 1),
+tot AS (SELECT sum(credits_used_compute::DECIMAL(18, 6)) AS credits FROM query_metering_history WHERE warehouse_name = 'TRANSFORM_WH' AND start_time >= TIMESTAMP '2026-01-01')
+SELECT CASE WHEN read_outside_dbt THEN 'read' ELSE 'unread' END AS mart_status, count(*) AS marts,
+  round(sum(c.credits), 2) AS build_credits, round(100 * sum(c.credits) / max(tot.credits), 1) AS pct_of_transform_wh,
+  list(table_name ORDER BY table_name) FILTER (WHERE NOT read_outside_dbt) AS unread_marts
+FROM marts JOIN cost c USING (unique_id) CROSS JOIN tot GROUP BY 1 ORDER BY 1;
 
-CREATE OR REPLACE TABLE lineage_from_access AS
-SELECT DISTINCT b.objectName AS source, m.objectName AS target
-FROM account_usage.access_history, unnest(objects_modified) AS u(m), unnest(base_objects_accessed) AS v(b)
-WHERE b.objectName <> m.objectName;
-
--- The edges only access_history sees: the stored procedure.
-FROM lineage_from_access EXCEPT FROM lineage_from_text;
-
--- Everything downstream of DIM_CUSTOMERS, including the people and tools reading it.
-WITH RECURSIVE edges AS (
-  FROM lineage_from_access
-  UNION
-  SELECT DISTINCT o.objectName, 'consumer:' || user_name
-  FROM account_usage.access_history, unnest(base_objects_accessed) AS v(o)
-  WHERE len(objects_modified) = 0
-),
-downstream(node, depth) AS (
-  SELECT 'ANALYTICS.MARTS.DIM_CUSTOMERS', 0
-  UNION
-  SELECT e.target, d.depth + 1 FROM downstream d JOIN edges e ON e.source = d.node
-)
-SELECT node, min(depth) AS hops FROM downstream GROUP BY 1 ORDER BY hops, node;
-
--- Workloads: connected components over table→table edges, leaving out the shared customer chain
--- (move that first, as its own workload). Product and the HubSpot staging split off cleanly. Finance,
--- marketing and ops still collapse into one component: FCT_ORDERS feeds attribution, and the monthly
--- board pack reads inventory. Those coupling edges are the conversation to have with the business.
-WITH RECURSIVE g AS (
-  SELECT source AS a, target AS b FROM lineage_from_access
-  WHERE source NOT LIKE '%CUSTOMER%' AND target NOT LIKE '%CUSTOMER%'
-  UNION SELECT target, source FROM lineage_from_access
-  WHERE source NOT LIKE '%CUSTOMER%' AND target NOT LIKE '%CUSTOMER%'
-),
-walk(node, root) AS (
-  SELECT DISTINCT a, a FROM g
-  UNION
-  SELECT g.b, w.root FROM walk w JOIN g ON g.a = w.node
-),
-comp AS (SELECT node, min(root) AS component FROM walk GROUP BY 1)
-SELECT component, count(*) AS n_tables, list(node ORDER BY node) AS tables
-FROM comp GROUP BY 1 ORDER BY n_tables DESC;
+-- The other direction: RAW_POS.PUBLIC.TICKETS was dropped on 2026-02-16 (POS loads moved to
+-- RAW_POS_V2 on 2026-01-12). The royalty_statements app and SP_CALC_FRANCHISE_ROYALTIES never got
+-- the memo: 3,118 + 308 failed queries with error 002003 since the drop.
+SELECT query_tag, error_code, any_value(error_message) AS error_message, count(*) AS failed_queries, min(start_time)::DATE AS first_failure
+FROM query_history WHERE execution_status <> 'SUCCESS' GROUP BY ALL;
 
 -- ── B · Inventory ────────────────────────────────────────────────────────────
-CREATE OR REPLACE TABLE table_inventory AS
-WITH t AS (
-  SELECT table_catalog || '.' || table_schema || '.' || table_name AS fqn, *
-  FROM account_usage.tables
-),
+-- One row per table with reads, readers and build credits, plus a first-pass bucket.
+-- Run it in a database of your own (the share is read-only), e.g.
+--   CREATE DATABASE IF NOT EXISTS my_migration; then prefix with CREATE TABLE my_migration.table_inventory AS
+WITH r AS (
+  SELECT unnest(json_extract_string(base_objects_accessed, '$[*].objectId'))::INTEGER AS table_id, user_name, query_start_time
+  FROM access_history),
 reads AS (
-  SELECT o.objectName AS fqn, count(*) AS n_reads, count(DISTINCT a.user_name) AS n_readers,
-         list(DISTINCT a.user_name ORDER BY a.user_name) AS readers, max(a.query_start_time) AS last_read
-  FROM account_usage.access_history a, unnest(a.base_objects_accessed) AS u(o)
-  WHERE len(a.objects_modified) = 0 OR NOT list_contains(list_transform(a.objects_modified, lambda m: m.objectName), o.objectName)
-  GROUP BY 1
-),
-writes AS (
-  SELECT m.objectName AS fqn, count(*) AS n_writes, any_value(q.user_name) AS writer,
-         any_value(q.query_tag) FILTER (WHERE q.query_tag <> '') AS query_tag,
-         any_value(q.query_type) AS write_type
-  FROM account_usage.access_history a
-  CROSS JOIN unnest(a.objects_modified) AS u(m)
-  JOIN account_usage.query_history q ON q.query_id = a.query_id
-  WHERE a.query_start_time >= TIMESTAMP '2026-08-03'
-  GROUP BY 1
-),
-upstreams AS (
-  SELECT m.objectName AS fqn, count(DISTINCT b.objectName) AS n_upstream
-  FROM account_usage.access_history a, unnest(a.objects_modified) AS u(m), unnest(a.base_objects_accessed) AS v(b)
-  WHERE b.objectName <> m.objectName
-  GROUP BY 1
-),
-cols AS (
-  SELECT table_catalog || '.' || table_schema || '.' || table_name AS fqn,
-         count(*) AS n_columns, count(*) FILTER (WHERE data_type = 'VARIANT') AS n_variant
-  FROM account_usage.columns GROUP BY 1
-)
-SELECT
-  t.fqn, t.table_type, round(t.bytes / 1e9, 2) AS gb, t.row_count,
-  w.writer, json_extract_string(w.query_tag, '$.materialized') AS dbt_materialized,
-  coalesce(w.n_writes, 0) AS writes_90d, t.last_altered,
-  coalesce(r.n_reads, 0) AS reads_90d, coalesce(r.n_readers, 0) AS readers_90d, r.readers, r.last_read,
-  c.n_columns, c.n_variant, coalesce(u.n_upstream, 0) AS n_upstream,
+  SELECT table_id,
+    count(*) FILTER (WHERE user_name <> 'DBT_SVC') AS consumer_reads,
+    count(*) FILTER (WHERE user_name = 'DBT_SVC') AS dbt_reads,
+    count(DISTINCT user_name) FILTER (WHERE user_name <> 'DBT_SVC') AS readers,
+    list(DISTINCT user_name) FILTER (WHERE user_name <> 'DBT_SVC' AND user_name NOT LIKE 'ANALYST%') AS services,
+    max(query_start_time) FILTER (WHERE user_name <> 'DBT_SVC') AS last_consumer_read
+  FROM r GROUP BY 1),
+w AS (
+  SELECT unnest(json_extract_string(objects_modified, '$[*].objectId'))::INTEGER AS table_id, query_id FROM access_history),
+builds AS (
+  SELECT w.table_id, round(sum(m.credits_used_compute::DECIMAL(18, 6)), 1) AS build_credits
+  FROM w JOIN query_metering_history m USING (query_id) GROUP BY 1),
+inv AS (
+  SELECT t.table_catalog || '.' || t.table_schema || '.' || t.table_name AS fqn, t.table_owner, t.table_type,
+    round(t.bytes / 1e9, 1) AS gb, t.deleted < TIMESTAMP '9999-01-01' AS dropped,
+    coalesce(r.consumer_reads, 0) AS consumer_reads, coalesce(r.dbt_reads, 0) AS dbt_reads, coalesce(r.readers, 0) AS readers,
+    r.services, r.last_consumer_read::DATE AS last_consumer_read, coalesce(b.build_credits, 0) AS build_credits
+  FROM account_tables t LEFT JOIN reads r USING (table_id) LEFT JOIN builds b USING (table_id))
+SELECT *,
   CASE
-    WHEN coalesce(r.n_reads, 0) = 0 AND coalesce(w.n_writes, 0) = 0 THEN 'leave behind'
-    WHEN coalesce(w.n_writes, 0) = 0 THEN 'leave behind (but tell the reader)'
-    WHEN t.table_type = 'EXTERNAL TABLE' OR w.writer = 'SNOWPIPE' THEN 'query in place'
-    WHEN t.table_schema = 'SNAPSHOTS' OR w.writer = 'K.NAKAMURA' THEN 'copy'
-    ELSE 'rebuild'
-  END AS proposed_bucket
-FROM t
-LEFT JOIN reads r USING (fqn) LEFT JOIN writes w USING (fqn)
-LEFT JOIN upstreams u USING (fqn) LEFT JOIN cols c USING (fqn);
+    WHEN dropped THEN 'leave behind'                                          -- gone already; repoint its readers first
+    WHEN table_owner = 'LOOKER_ROLE' THEN 'leave behind'                      -- Looker PDTs: Looker rebuilds them on the new connection
+    WHEN table_owner = 'LOADER' AND consumer_reads = 0 AND dbt_reads = 0 THEN 'leave behind'
+    WHEN fqn LIKE 'MARTS.%' AND consumer_reads = 0 THEN 'leave behind'        -- the 8 dead marts from A3
+    WHEN build_credits > 100 THEN 'copy'                                      -- fct_ticket_lines: copy history, continue incrementally
+    ELSE 'rebuild'                                                            -- dbt models, and raw tables a loader can re-sync
+  END AS bucket
+FROM inv ORDER BY bucket, build_credits DESC, gb DESC;
 
-SELECT fqn, gb, writer, writes_90d, reads_90d, readers, proposed_bucket FROM table_inventory ORDER BY proposed_bucket, gb DESC NULLS LAST;
-
--- How well did the heuristic do against the answer key?
-SELECT i.fqn, i.proposed_bucket, a.bucket AS answer, a.why
-FROM table_inventory i JOIN answers.table_buckets a USING (fqn)
-WHERE NOT starts_with(i.proposed_bucket, a.bucket);
+-- What the heuristic can't know, and you have to ask a human about:
+--   - RAW_* tables: can the loader re-sync full history? If the source only keeps recent data, copy instead of rebuild.
+--   - RAW_POS.PUBLIC.TICKETS held POS history from before 2026-01-12. It's dropped: is that history needed, and does it exist anywhere else?
+--   - Nothing at Duckoffee lives in object storage yet, so "query in place" is empty. That's a finding too.
+--   - FCT_TICKET_LINES (17.3 GB, 497 build credits, most of TRANSFORM_WH): fix the is_incremental filter before you port it.
 
 -- ── C · Validate the duckoffee share ────────────────────────────────────────
 -- Run in a database where the share is attached:

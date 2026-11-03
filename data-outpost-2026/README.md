@@ -34,7 +34,7 @@ Ducks in `public/ducks/`: `duck-*.png` were generated with the Scenario "Motherd
 
 ## Dataset
 
-See [`workshop/README.md`](workshop/README.md). Generate locally with `npm run generate:data` (needs the `duckdb` CLI).
+See [`workshop/README.md`](workshop/README.md). Exercises A–C run on public MotherDuck shares. The bonus exercises use `workshop/generate.sql`: `npm run generate:data` builds it locally (needs the `duckdb` CLI).
 
 ## Edit
 

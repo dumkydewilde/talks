@@ -3,39 +3,44 @@
 -- Moving house rule: you don't pack the box before you know what's in it.
 -- Goal: one row per table with enough evidence to put it in a bucket:
 --   copy · rebuild · query in place · leave behind
--- Then turn it into a Dive that the head ducks can look at without reading SQL.
+-- Then turn it into a Dive the head ducks can read without SQL.
 --
--- Reuse what you learned in exercise A: writes, reads and dead ends.
+-- Same share as exercise A:
+--   USE devtools_duckoffee_warehouse_lineage;
+-- Reuse what you learned in A: who reads what, dead ends, the dropped table.
 
--- B1. Warm-up: what's big?
-SELECT table_catalog, table_schema, table_name, table_type, row_count, round(bytes / 1e9, 1) AS gb, last_altered
-FROM account_usage.tables
-ORDER BY bytes DESC NULLS LAST;
+-- B1. Warm-up: what's there, and what's big?
+SELECT table_catalog, table_schema, table_name, table_owner, table_type,
+       round(bytes / 1e9, 1) AS gb, deleted < TIMESTAMP '9999-01-01' AS dropped, comment
+FROM account_tables
+ORDER BY bytes DESC;
 
--- B2. Who reads what? base_objects_accessed is a list of structs: unnest it.
---     TODO: add distinct readers and the last read per table. Leave out reads that are part of a
---     write (a dbt model reading its upstream): you want the consumers.
+-- B2. Who reads what? base_objects_accessed is a JSON array: unnest its objectId values and
+--     join them to account_tables.table_id.
+--     TODO: split reads into "dbt reading its parents" (DBT_SVC) and real consumers, and add
+--     the readers and the last read per table.
 SELECT
-  o.objectName AS fqn,
+  unnest(json_extract_string(base_objects_accessed, '$[*].objectId'))::INTEGER AS table_id,
   count(*) AS n_reads
-FROM account_usage.access_history, unnest(base_objects_accessed) AS u(o)
+FROM access_history
 GROUP BY ALL
 ORDER BY n_reads DESC;
 
 -- B3. TODO: one inventory row per table. Add:
---   - who writes it (user_name of the writing query; dbt runs carry a query_tag with JSON)
---   - how often it's written
---   - complexity: column count, VARIANT columns (account_usage.columns), number of upstream tables
---   - size in GB
---   - your proposed bucket
--- Then: CREATE TABLE table_inventory AS ...
+--   - owner (LOADER, TRANSFORMER, LOOKER_ROLE) and whether it was dropped
+--   - consumer reads, readers, last read
+--   - what it costs to build: credits of the queries that write it
+--     (access_history.objects_modified → query_metering_history)
+--   - your proposed bucket and a one-line reason
+-- Then: CREATE TABLE table_inventory AS ...   (in a database of your own)
 --
--- Three traps are hidden in there (no spoilers):
---   - a table nobody writes any more but somebody still reads
---   - a report that only runs once a month
---   - history that exists nowhere except in this warehouse
+-- Things to look out for (no spoilers, but they are in there):
+--   - a table that no longer exists but is still queried every day
+--   - scratch tables that belong to the BI tool, not to you
+--   - one table that is far bigger and more expensive than everything else
+--   - marts that cost credits every night and are read by nobody
 
 -- B4. Make it a Dive. Prompt suggestion for the MotherDuck agent / MCP:
---   "Build a Dive over <db>.main.table_inventory: a sortable table of every table with its
---    bucket, size and last read; bar charts of GB per bucket and per workload; and a
---    highlight of tables that are large but never read."
+--   "Build a Dive over <your db>.main.table_inventory: a sortable table of every table with its
+--    bucket, size, build credits and last read; bar charts of GB and credits per bucket; and a
+--    highlight of tables that cost credits but have no consumer reads."

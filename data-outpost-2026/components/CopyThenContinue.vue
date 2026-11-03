@@ -27,7 +27,7 @@ const nightsX = Array.from({ length: 14 }, (_, i) => cutoff + 6 + i * 11)
     <!-- step 0: one big incremental table -->
     <rect :x="x(2022, 3)" y="100" :width="(step >= 1 ? cutoff : x(2026, 11)) - x(2022, 3)" height="56" :class="step >= 1 ? 'ctc-copied' : 'ctc-old'" />
     <text :x="x(2022, 3) + 16" y="134" class="ctc-label">
-      {{ step >= 1 ? 'Copied once as Parquet · 640 GB, untouched' : 'STG_APP_EVENTS · 640 GB · four years of increments · hours to rebuild' }}
+      {{ step >= 1 ? 'Copied once as Parquet · 17 GB, untouched' : 'FCT_TICKET_LINES · 144M rows · years of increments · ~50 min every night' }}
     </text>
 
     <!-- step 1: cutoff -->
@@ -46,7 +46,7 @@ const nightsX = Array.from({ length: 14 }, (_, i) => cutoff + 6 + i * 11)
     <g v-if="step >= 3">
       <path :d="`M ${x(2022, 3)} 70 V 54 H ${x1 - 10} V 70`" class="ctc-bracket" />
       <rect :x="(x(2022, 3) + x1) / 2 - 170" y="34" width="340" height="38" class="ctc-viewbox" />
-      <text :x="(x(2022, 3) + x1) / 2" y="59" text-anchor="middle" class="ctc-label code">VIEW marts.fct_app_events</text>
+      <text :x="(x(2022, 3) + x1) / 2" y="59" text-anchor="middle" class="ctc-label code">VIEW marts.fct_ticket_lines</text>
     </g>
   </svg>
 </template>

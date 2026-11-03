@@ -382,3 +382,8 @@
 .setup-qr span { font: 11px 'Aeonik Mono', monospace; letter-spacing: .06em; text-transform: uppercase; line-height: 1.5; }
 .cover-art > img.cover-duck { transform: rotate(-4deg); width: 400px; height: 400px; }
 .ctc-tick.night { fill: var(--sky-dark); }
+
+/* Long share URLs wrap instead of pushing the setup columns off the slide. */
+.setup-steps { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.setup-steps > div { min-width: 0; }
+.setup-steps pre, .setup-steps pre code { white-space: pre-wrap !important; word-break: break-all; }

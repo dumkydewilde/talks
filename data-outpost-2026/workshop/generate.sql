@@ -1,4 +1,6 @@
--- Duckoffee — a synthetic "legacy warehouse" for the Data Outpost migration workshop.
+-- Duckoffee — data for the two BONUS exercises (bonus/1_incremental.sql, bonus/2_compare_two_warehouses.sql).
+-- Exercises A and B use the DuckGen share instead (see README.md). The account_usage schema below is an older,
+-- simpler stand-in for it and is no longer used by the main exercises.
 --
 -- Mimics what you'd export from Snowflake's SNOWFLAKE.ACCOUNT_USAGE views for a ~40-table
 -- dbt + Fivetran + Airflow stack, plus two small datasets for the incrementality and

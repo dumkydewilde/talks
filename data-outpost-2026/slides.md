@@ -134,7 +134,7 @@ section: INTRO
 
 <ol class="numbered">
   <li><span>20 cafes in 14 cities<small>From The Pond Stage in Amsterdam to Ahiru Roast in Tokyo. Run by the head ducks.</small></span></li>
-  <li><span>A very normal data stack<small>Snowflake, Fivetran, Airbyte, dbt, Airflow, Looker, Hightouch to HubSpot, a loyalty app, and one Google Sheet nobody remembers making.</small></span></li>
+  <li><span>A very normal data stack<small>Snowflake, dbt with 60 models, two stored procedures, Looker plus a second BI tool, three data apps, and twelve analysts with a SQL editor.</small></span></li>
   <li><span>You’re the new data lead<small>The Snowflake contract renews in four months. The head ducks would like to not renew it. Congratulations!</small></span></li>
 </ol>
 </div>
@@ -213,12 +213,11 @@ section: SETUP
   <div>
     <span class="card-index">A + B · THE OLD WAREHOUSE</span>
     <h3>Duckoffee’s Snowflake diary</h3>
-    <p>A synthetic <code>ACCOUNT_USAGE</code> export: 41 tables, 31k queries over 91 days, who read and wrote what.</p>
+    <p>Seven months of query and access history, credits, and the whole dbt project. 459k queries, 74 tables.</p>
 
 ```sql
-CREATE DATABASE duckoffee_legacy;
-USE duckoffee_legacy;
--- paste workshop/generate.sql, run it
+ATTACH 'md:_share/dg_devtools_duckoffee_warehouse_lineage_s_bae5bc27_r1/dbcfb372-fef8-4d92-b997-26254d727cd0'
+  AS devtools_duckoffee_warehouse_lineage;
 ```
 
   </div>
@@ -244,9 +243,9 @@ ATTACH 'md:_share/duckoffee/1877e7c6-96ea-4f88-a01f-3fed396ea7b8'
 
 <!--
 07:00–10:00
-Walk around. generate.sql runs in under a second.
+Walk around. Both are MotherDuck shares: one ATTACH each, nothing to load. Check before the event that the DuckGen share is attachable from a fresh account outside the MotherDuck org.
+A + B: a DuckGen release (devtools-duckoffee-warehouse-lineage, 20261103-bae5bc27-s-r1), shaped like Snowflake ACCOUNT_USAGE plus dbt artifacts.
 Own Snowflake account? The md-migration-assessment collector gives you the same tables for your own account. Link on the last slide. Needs Enterprise Edition for ACCESS_HISTORY.
-TODO before the event: swap generate.sql for the new synthetic dataset (query history + dbt runs), and publish it as a share so it's one ATTACH like the coffee data.
 -->
 
 ---
@@ -384,19 +383,19 @@ step: 1
   <div v-click>
     <span class="card-index">01</span>
     <h3>Reverse ETL &amp; signals</h3>
-    <p>Hightouch syncs loyalty audiences to HubSpot every hour. Alerts fire when a cafe’s sales drop.</p>
+    <p>Duckoffee has none (yet). Elsewhere: audiences synced to the CRM, alerts when a cafe’s sales drop.</p>
     <p class="trap">Trap: they write into other systems. Break them and marketing emails the wrong ducks.</p>
   </div>
   <div v-click>
     <span class="card-index">02</span>
     <h3>Data apps &amp; sheets</h3>
-    <p>Streamlit, custom apps, Power Apps, and that Google Sheet someone made in 2021.</p>
+    <p>A supply planner, royalty statements, and <code>cafe_ops</code>, which polls three marts every 30 seconds and isn’t declared anywhere.</p>
     <p class="trap">Trap: nobody remembers they exist until Monday morning.</p>
   </div>
   <div v-click>
     <span class="card-index">03</span>
     <h3>BI tools</h3>
-    <p>Looker for the head ducks. A monthly board pack that runs on the 1st.</p>
+    <p>Looker for the head ducks, a second BI tool for franchisees, and a morning-sales dashboard opened at 06:30 sharp.</p>
     <p class="trap">Trap: monthly reports. A two-week test run won’t catch them.</p>
   </div>
 </div>
@@ -426,15 +425,15 @@ step: 1
 
 <div class="exercise-grid">
 <ol class="numbered">
-  <li><span><strong>Loading patterns</strong><small>Who writes what, at what time, and how often? Hourly, nightly, or once a month?</small></span></li>
-  <li><span><strong>Lineage</strong><small>Which table feeds which? Try <code>access_history</code>, then try parsing the SQL. Spot the difference.</small></span></li>
-  <li><span><strong>Dead ends</strong><small>Tables nothing reads. And the opposite: tables nothing writes but someone still reads.</small></span></li>
-  <li><span><strong>Make it a Dive</strong><small>Write heatmap, lineage graph, and a list of dead ends.</small></span></li>
+  <li><span><strong>Loading patterns</strong><small>What runs when? When does the nightly dbt build finish, and has that changed?</small></span></li>
+  <li><span><strong>Lineage</strong><small>Observed reads from <code>access_history</code> vs what dbt declares. What’s missing?</small></span></li>
+  <li><span><strong>Dead ends</strong><small>Marts nobody reads. And the opposite: a table that’s gone but still queried.</small></span></li>
+  <li><span><strong>Make it a Dive</strong><small>Nightly finish time, lineage graph, dead ends.</small></span></li>
 </ol>
 <div class="exercise-side">
   <div class="exercise-file">workshop/exercises/A_query_history.sql</div>
-  <p class="small-callout">Agent prompt: “Read account_usage.query_history and access_history. Show me write patterns per hour, a table-level lineage graph as Mermaid, and every table nothing reads.”</p>
-  <p class="small-callout">Your own Snowflake? Same queries work on <code>SNOWFLAKE.ACCOUNT_USAGE</code>, with <code>LATERAL FLATTEN</code> instead of <code>unnest</code>.</p>
+  <p class="small-callout">Agent prompt: “Read query_history, access_history and the dbt tables. When does the nightly build finish? Draw the lineage as Mermaid, flag edges dbt doesn’t declare, and list every mart nothing reads.”</p>
+  <p class="small-callout">Your own Snowflake? Same tables in <code>SNOWFLAKE.ACCOUNT_USAGE</code>, with <code>LATERAL FLATTEN</code> instead of <code>json_extract</code>.</p>
 </div>
 </div>
 
@@ -443,10 +442,10 @@ step: 1
 Start the timer. Walk around.
 Answers in workshop/solutions.sql, section A.
 Debrief (2 min):
-- Patterns: Fivetran and Snowpipe hourly, everything else nightly, and two things only on the 1st: hand-uploaded FX rates and the board pack procedure.
-- Lineage: parsing SQL misses the three edges into BOARD_PACK_MONTHLY, because CALL names no tables. Access history has them.
-- Dead ends: a 15 GB marketing backup nobody reads (you pay for that), a one-off fix table, an old customer dim and a 2019 CRM export.
-- The opposite trap: FCT_ORDERS_V1 hasn't been written since 2024 but a Google Sheet reads it every Monday.
+- Patterns: procedures at 01:00, dbt from 02:00, done by ~05:30. Until 2026-02-02: then it finishes ~07:30. fct_ticket_lines went from 4 to 50 minutes, 0.4M to 120M rows a run. A broken is_incremental filter rebuilds it in full every night. Since then ~70% of the 06:30–08:00 morning-sales views show yesterday's data. (That's the incremental slide, for real.)
+- Lineage: 14 reads dbt doesn't declare. Marketing's Looker explores read RAW_ADS and RAW_LOYALTY directly. cafe_ops reads three marts with no exposure. A dbt staging model reads a Looker PDT. The stored procedures read RAW tables but their writes don't show up at all.
+- Dead ends: 8 of 32 marts have no reads outside dbt: 6.4% of the transform bill for nobody.
+- The opposite: RAW_POS.PUBLIC.TICKETS was dropped on 2026-02-16 after POS moved to RAW_POS_V2. The royalty app and SP_CALC_FRANCHISE_ROYALTIES still query it: 3,400+ failed queries. That's what an unfinished migration looks like.
 -->
 
 ---
@@ -465,8 +464,8 @@ step: 2
 Copy: data that exists nowhere else. SCD2 snapshots, hand uploads, history from a prod DB that only keeps current state.
 Rebuild: anything you can re-derive. Idempotent dbt models, connectors that can re-sync. Rebuilding beats copying when you have the choice: you also prove the pipeline works.
 Query in place: data already in S3, GCS or Iceberg. Don't move it, point at it.
-Leave behind: decided by query and access history, not by gut feeling. Sorry, CRM_EXPORT_2019.
-Let the room shout answers, click to sort, then reveal. FCT_ORDERS_V1 and BOARD_PACK are the traps.
+Leave behind: decided by query and access history, not by gut feeling. Sorry, FCT_MART_57.
+Let the room shout answers, click to sort, then reveal. The traps: RAW_POS.PUBLIC.TICKETS (gone, but still queried), the Looker PDT (not yours to move), and FCT_TICKET_LINES (the only copy). Nothing at Duckoffee lives in object storage, so nothing is query in place. That's a finding too.
 -->
 
 ---
@@ -532,7 +531,7 @@ step: 2
 <!--
 37:00–49:00
 Answers: solutions.sql section B, and the answers.table_buckets table.
-Debrief: the heuristic in the solutions matches the answer key on all 41 tables, but only because the data is clean. In real life the last 10% of tables needs a conversation with a human.
+Debrief: the heuristic in solutions.sql puts 61 tables in rebuild, 12 in leave behind, 1 in copy. Then the human questions: can the loaders re-sync full history? Does anyone need the POS history that was in the dropped table? In real life the last 10% of tables needs a conversation, not a query.
 -->
 
 ---
@@ -585,7 +584,7 @@ step: 4
 
 <ol class="numbered">
   <li><span>A <strong>workload</strong> is tables + pipelines + consumers that cut over together.</span></li>
-  <li><span>Shared tables tie workloads together<small>Duckoffee’s <code>DIM_CUSTOMERS</code> feeds four of them. Move it first, on its own.</small></span></li>
+  <li><span>Shared tables tie workloads together<small>Duckoffee’s <code>FCT_TICKET_LINES</code> feeds morning sales, royalties and the <code>cafe_ops</code> app. Move it with care, on its own.</small></span></li>
   <li><span>No dbt everywhere? Let your agent read the query history.<small>dbt query tags make this much easier.</small></span></li>
 </ol>
 
@@ -594,12 +593,13 @@ step: 4
 
 ```sql
 -- table → table edges, from what was actually read and written
-SELECT DISTINCT b.objectName AS source,
-                m.objectName AS target
-FROM account_usage.access_history,
-     unnest(objects_modified)      AS u(m),
-     unnest(base_objects_accessed) AS v(b)
-WHERE b.objectName <> m.objectName;
+SELECT DISTINCT
+  unnest(json_extract_string(base_objects_accessed,
+                             '$[*].objectName')) AS source,
+  json_extract_string(objects_modified,
+                      '$[0].objectName')      AS target
+FROM access_history
+WHERE objects_modified <> '[]';
 ```
 
 <p class="small-callout">On query tags: <a href="https://www.dumky.net/posts/optimizing-snowflake-costs-with-dbt-query-tags/" target="_blank" rel="noopener noreferrer">Optimizing Snowflake costs with dbt query tags ↗</a></p>
@@ -610,7 +610,7 @@ WHERE b.objectName <> m.objectName;
 <!--
 51:00–53:00
 You built this lineage in exercise A. Now use it: groups of tables with no edges between them can move independently.
-For Duckoffee: the loyalty app (app events → feature usage → app) splits off cleanly. Finance, marketing and ops are tangled through FCT_ORDERS and the board pack.
+For Duckoffee: everything downstream of POS tickets (fct_ticket_lines → morning sales, royalty base, cafe_ops) moves together. Ask the room which group they'd move first, and why.
 -->
 
 ---
@@ -721,6 +721,7 @@ Six clicks, the caption on the slide tells the story:
 5. Night 4 and a retry: nothing changes. Idempotent.
 6. Night 4 also brought events for days 2 and 3 (hatched). A rollup that only rebuilds "yesterday" misses them: use a lookback window.
 Why this matters: you'll rerun loads constantly while you move and check things. Every rerun has to be safe.
+Duckoffee's own version, from exercise A: a broken is_incremental filter quietly turned fct_ticket_lines into a full rebuild every night. Nobody noticed until franchisees saw yesterday's numbers.
 Bonus exercise 1 in the repo lets people try it in SQL.
 -->
 
@@ -740,15 +741,15 @@ clicks: 3
 <div v-click="3">
 
 ```sql
-CREATE VIEW marts.fct_app_events AS
-SELECT * FROM legacy_copy.stg_app_events WHERE event_date <  DATE '2026-11-01'
+CREATE VIEW marts.fct_ticket_lines AS
+SELECT * FROM legacy_copy.fct_ticket_lines WHERE business_date <  DATE '2026-11-01'
 UNION ALL BY NAME
-SELECT * FROM staging.stg_app_events     WHERE event_date >= DATE '2026-11-01';
+SELECT * FROM marts.fct_ticket_lines_new    WHERE business_date >= DATE '2026-11-01';
 ```
 
 </div>
 
-<p class="small-callout">Duckoffee’s loyalty-app events: rebuilding four years means hours of compute. Copy once, build only new nights, glue both together behind one view.</p>
+<p class="small-callout">Duckoffee’s <code>fct_ticket_lines</code>: 144M rows, and ~50 minutes a night since its incremental filter broke. Copy the history once, build only new nights, glue both together behind one view.</p>
 
 <!--
 61:00–62:00

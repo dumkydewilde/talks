@@ -1,27 +1,28 @@
 # Workshop data & exercises
 
-The story: **Duckoffee**, a coffee chain of 20 cafes in 14 cities (the same Duckoffee as the [Cloudflare Workers demo](https://motherduck.com/blog/motherduck-on-cloudflare-workers/)), is leaving Snowflake. You're the new data lead.
+The story: **Duckoffee**, a coffee franchise (the same Duckoffee as the [Cloudflare Workers demo](https://motherduck.com/blog/motherduck-on-cloudflare-workers/)), is leaving Snowflake. You're the new data lead.
 
-## Two datasets
+## Data
 
-**1. Duckoffee's old warehouse** (`generate.sql`, exercises A and B, bonus 1 and 2): a synthetic Snowflake `ACCOUNT_USAGE` export. It's a stand-in until the new synthetic dataset (query history plus dbt runs) is ready.
+Everything is a MotherDuck share: one `ATTACH`, nothing to load.
+
+**Duckoffee's old warehouse** (exercises A and B): seven months (2025-09-01 → 2026-03-31) of Snowflake-style `ACCOUNT_USAGE` plus the dbt project. Generated with DuckGen, release `20261103-bae5bc27-s-r1` ([manifest](https://us.data.motherduck.com/duckgen/devtools-duckoffee-warehouse-lineage/20261103-bae5bc27-s-r1/manifest.json)).
 
 ```sql
-CREATE DATABASE duckoffee_legacy;
-USE duckoffee_legacy;
--- paste generate.sql and run it
+ATTACH 'md:_share/dg_devtools_duckoffee_warehouse_lineage_s_bae5bc27_r1/dbcfb372-fef8-4d92-b997-26254d727cd0'
+  AS devtools_duckoffee_warehouse_lineage;
 ```
 
-Or locally: `duckdb duckoffee_legacy.duckdb < generate.sql`. It runs in under a second and is deterministic, so everyone gets the same numbers.
+| Table | Rows | What |
+| --- | ---: | --- |
+| `query_history` | 459,365 | One row per query: text, type, user, warehouse, `query_tag`, timing, status |
+| `query_metering_history` | 455,939 | Credits per query |
+| `access_history` | 455,939 | Tables read and written per query, as JSON arrays (`objectName`, `objectId`) |
+| `account_tables` | 74 | Every table, its owner and size; `comment` holds the dbt node |
+| `sessions` | 29,680 | Client per session |
+| `dbt_models`, `dbt_run_results`, `dbt_invocations`, `dbt_exposures` | 60 / 12,720 / 212 / 9 | The dbt side: declared lineage, run times, declared consumers |
 
-| Schema | Tables | Used in |
-| --- | --- | --- |
-| `account_usage` | `tables`, `columns`, `query_history` (31k queries, 91 days), `access_history`, `warehouse_metering_history` | A, B |
-| `incremental` | `app_event_deliveries`: 7 nightly deliveries, one redelivered, ~6% late events | Bonus 1 |
-| `validation` | `sf_fct_orders` vs `md_fct_orders`, with four planted differences | Bonus 2 |
-| `answers` | `table_buckets`: the answer key for B | Facilitator |
-
-**2. Duckoffee's coffee orders** (public share, exercise C): 120k orders, raw → staging → marts.
+**Duckoffee's coffee orders** (exercise C): 120k orders, raw → staging → marts.
 
 ```sql
 ATTACH 'md:_share/duckoffee/1877e7c6-96ea-4f88-a01f-3fed396ea7b8' AS duckoffee;
@@ -29,14 +30,14 @@ ATTACH 'md:_share/duckoffee/1877e7c6-96ea-4f88-a01f-3fed396ea7b8' AS duckoffee;
 
 ## Exercises
 
-- **A** `exercises/A_query_history.sql`: loading patterns, lineage and dead ends from query history, then a Dive.
+- **A** `exercises/A_query_history.sql`: loading patterns, observed vs declared lineage, dead ends, then a Dive.
 - **B** `exercises/B_inventory.sql`: an inventory of every table, sorted into copy / rebuild / query in place / leave behind, then a Dive.
 - **C** `exercises/C_validate_duckoffee.sql`: validate the coffee data (nulls, timestamps, categories, row counts per layer), then a data quality Dive.
 - **D** `action-plan.md` (also interactive on the slide): your own plan, for your own warehouse.
-- Bonus: `bonus/1_incremental.sql` (append vs merge, late data) and `bonus/2_compare_two_warehouses.sql` (find four differences between old and new).
+- Bonus: `bonus/1_incremental.sql` (append vs merge, late data) and `bonus/2_compare_two_warehouses.sql` (four differences between old and new). These run on `generate.sql`: `CREATE DATABASE duckoffee_legacy; USE duckoffee_legacy;` then paste it, or `duckdb duckoffee_legacy.duckdb < generate.sql` locally.
 
-`solutions.sql` has worked answers for all of them. The presenter notes in `../slides.md` list the expected numbers.
+`solutions.sql` has worked answers for all of them. The presenter notes in `../slides.md` list the expected numbers. The A numbers match the answer keys DuckGen publishes for this release.
 
 ## Bring your own Snowflake
 
-Run [md-migration-assessment](https://github.com/motherduckdb/md-migration-assessment) (Public Preview) or query `SNOWFLAKE.ACCOUNT_USAGE` directly. Exercises A and B work the same, with `LATERAL FLATTEN` in place of `unnest`. `ACCESS_HISTORY` needs Enterprise Edition.
+Run [md-migration-assessment](https://github.com/motherduckdb/md-migration-assessment) (Public Preview) or query `SNOWFLAKE.ACCOUNT_USAGE` directly. Exercises A and B use the same tables and columns; replace `json_extract_string(...)` + `unnest` with `LATERAL FLATTEN`. `ACCESS_HISTORY` needs Enterprise Edition.
