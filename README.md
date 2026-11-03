@@ -24,7 +24,8 @@ Prefer the shared MDX deck framework for new talks. The older
 `infrastructure-for-answers` deck is a legacy bespoke React deck and can stay as-is.
 The Helsinki Data Week 2026 deck is a standalone Slidev subproject in
 [`helsinki-data-week-2026/`](helsinki-data-week-2026/), built into the Pages site by
-the root `npm run build` command.
+the root `npm run build` command. The Data Outpost 2026 workshop
+([`data-outpost-2026/`](data-outpost-2026/)) is built the same way.
 
 1. Create `src/talks/<slug>/slides/`, one `.mdx` file per slide.
 2. Create `src/talks/<slug>/order.yaml` with slide ids in presentation order.
