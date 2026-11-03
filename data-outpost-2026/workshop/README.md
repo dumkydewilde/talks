@@ -38,7 +38,7 @@ ATTACH 'md:_share/duckoffee/1877e7c6-96ea-4f88-a01f-3fed396ea7b8' AS duckoffee;
 
 `solutions.sql` has worked answers for all of them. The presenter notes in `../slides.md` list the expected numbers. The A numbers match the answer keys DuckGen publishes for this release.
 
-Reference Dives for A and B, to show after each exercise (source in `dives/`, Data Outpost Dive theme):
+Reference Dives for A and B, to show after each exercise (source in `dives/`, styled like dataoutpost.ai):
 
 - [Exercise A: what the warehouse does all day](https://app.motherduck.com/dives/data-outpost-exercise-a-what-the-warehouse-does-1a9433d3-d757-425b-8097-61d46f572062)
 - [Exercise B: everything Duckoffee owns](https://app.motherduck.com/dives/data-outpost-exercise-b-everything-duckoffee-owns-1196b18f-3e3a-4f13-ac5d-c202ca9a018d)
