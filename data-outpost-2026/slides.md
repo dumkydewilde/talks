@@ -253,6 +253,7 @@ title: What does your data landscape look like?
 class: compact-slide
 section: 01 · DECIDE
 step: 1
+clicks: 7
 ---
 
 # First, what are we actually moving?

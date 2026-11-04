@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
+import { useNav, useSlideContext } from '@slidev/client'
 import { links } from '../config'
 
 // A deliberately reduced version of a16z's "Unified Data Infrastructure 2.0":
@@ -19,22 +20,32 @@ const bands: Layer[] = [
   { key: 'retention', title: 'Archival, retention & backup', examples: 'Time travel, snapshots, cold archives, legal holds', questions: ['What do you need to keep, and for how long?', 'Can old partitions become Parquet in object storage instead of warehouse tables?'] },
 ]
 
-const selected = ref<string>('transform')
-const current = computed(() => [...stages, ...bands].find(l => l.key === selected.value)!)
+// Stepped with → (frontmatter `clicks: 7`): click 0 is Sources, click 7 is the last band.
+// Clicking a box jumps to its click, so the arrows carry on from there.
+const layers = [...stages, ...bands]
+const { $clicks } = useSlideContext()
+const { go, currentSlideNo } = useNav()
+const current = computed(() => layers[Math.min($clicks.value, layers.length - 1)])
+const selected = computed(() => current.value.key)
+// Blur so the arrow keys go back to Slidev instead of the focused button.
+const select = (key: string, e: MouseEvent) => {
+  (e.currentTarget as HTMLElement).blur()
+  go(currentSlideNo.value, layers.findIndex(l => l.key === key))
+}
 </script>
 
 <template>
   <div class="landscape">
-    <div class="landscape-diagram" @keydown.stop>
+    <div class="landscape-diagram">
       <div class="landscape-stages">
-        <button v-for="(s, i) in stages" :key="s.key" type="button" class="landscape-stage" :class="{ active: selected === s.key }" @click="selected = s.key">
+        <button v-for="(s, i) in stages" :key="s.key" type="button" class="landscape-stage" :class="{ active: selected === s.key }" @click="select(s.key, $event)">
           <span class="card-index">0{{ i + 1 }}</span>
           <strong>{{ s.title }}</strong>
           <span>{{ s.examples }}</span>
           <i v-if="i < stages.length - 1" aria-hidden="true">→</i>
         </button>
       </div>
-      <button v-for="b in bands" :key="b.key" type="button" class="landscape-band" :class="{ active: selected === b.key }" @click="selected = b.key">
+      <button v-for="b in bands" :key="b.key" type="button" class="landscape-band" :class="{ active: selected === b.key }" @click="select(b.key, $event)">
         <strong>{{ b.title }}</strong><span>{{ b.examples }}</span>
       </button>
     </div>

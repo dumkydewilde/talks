@@ -41,7 +41,7 @@
 .md-slide .fullscreen-toggle:disabled { opacity: .5; cursor: not-allowed; }
 .fullscreen-error { position: absolute; top: 34px; right: 0; width: 250px; padding: 10px; border: 1px solid var(--ink); background: var(--sand); font-size: 12px; z-index: 20; }
 .header-dot { color: var(--ink); margin: 0 12px; }
-.md-slide .slide-content { flex: 1; min-height: 0; padding: 36px 0 20px; position: relative; }
+.md-slide .slide-content { flex: 1; min-height: 0; padding: 28px 0; position: relative; display: flex; flex-direction: column; justify-content: safe center; }
 .md-slide .deck-footer { display: flex; justify-content: space-between; font: 10px 'Aeonik Mono', monospace; letter-spacing: .06em; height: 24px; border-top: 1px solid var(--rule); padding-top: 12px; flex-shrink: 0; }
 .footer-slash { margin: 0 10px; color: var(--muted); }
 .md-slide h1, .md-slide h2, .md-slide h3, .md-slide p { margin: 0; }
@@ -90,10 +90,10 @@
 .audience-options strong { font-size: 27px; font-weight: 400; }
 .audience-options button > span:last-child { font-size: 18px; color: var(--muted); }
 
-.md-slide.compact-slide .slide-content { padding-top: 27px; }
+.md-slide.compact-slide .slide-content { padding-top: 22px; }
 .md-slide.compact-slide h1 { font-size: 43px; margin-bottom: 22px; }
 .md-slide.compact-slide .eyebrow { margin-bottom: 12px; }
-.md-slide.statement-slide .slide-content { display: flex; align-items: center; }
+.md-slide.statement-slide .slide-content { justify-content: center; }
 .md-slide.statement-slide h1 { font-size: 76px; line-height: 1.15; margin: 0; max-width: 1100px; }
 
 /* Persistent audience handout link on the cover and talk close. */
@@ -104,13 +104,13 @@
 .follow-along span, .follow-along a { font-size: 11px; line-height: 1.4; }
 .follow-along a { width: fit-content; font-family: 'Aeonik Mono', monospace; }
 
-.md-slide.resources-slide .slide-content { padding-top: 42px; }
-.resources-slide h1 { margin-bottom: 36px; }
+.md-slide.resources-slide .slide-content { padding-top: 22px; }
+.resources-slide h1 { margin-bottom: 24px; }
 .resources-grid { display: grid; grid-template-columns: .9fr 1.1fr; border: 1.5px solid var(--ink); }
 .resource-card { display: flex; flex-direction: column; padding: 28px 32px; }
 .resource-card + .resource-card { border-left: 1.5px solid var(--ink); }
 .resource-card > .card-index { margin-bottom: 20px; }
-.resource-card > a { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 15px 0; border-bottom: 1px solid var(--rule); font-size: 19px; }
+.resource-card > a { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 13px 0; border-bottom: 1px solid var(--rule); font-size: 19px; }
 .resource-card > a:last-child { border-bottom: 0; }
 .resource-card > a span { color: var(--muted); font: 11px 'Aeonik Mono', monospace; white-space: nowrap; }
 .resource-featured { background: var(--sky); }
@@ -269,7 +269,7 @@
 /* Fixes after visual review */
 .md-slide :not(pre) > code { background: transparent; padding: 0; border-radius: 0; }
 .landscape { height: auto; }
-.landscape-stages { flex: none; height: 250px; }
+.landscape-stages { flex: none; height: 280px; }
 .landscape-stage > span:last-of-type { font-size: 12.5px; }
 .md-slide .numbered li { font-size: 24px; }
 .md-slide .numbered li small { font-size: 17px; }
@@ -387,3 +387,7 @@
 .setup-steps { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .setup-steps > div { min-width: 0; }
 .setup-steps pre, .setup-steps pre code { white-space: pre-wrap !important; word-break: break-all; }
+
+/* Content is vertically centred between header and footer. Opt out per slide with `class: top-slide`. */
+.md-slide.top-slide .slide-content { justify-content: flex-start; }
+.md-slide.cover-slide .slide-content { display: block; }
