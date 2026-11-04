@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.slidev/
+*.log
+.DS_Store
+test-results/
+playwright-report/
+workshop/*.duckdb
+workshop/*.duckdb.wal

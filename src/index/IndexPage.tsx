@@ -77,6 +77,12 @@ type Talk = {
 
 const talks: Talk[] = [
   {
+    slug: "data-outpost-2026",
+    title: "Moving Your Warehouse",
+    eyebrow: "Data Outpost workshop · 2026",
+    subtitle: "A hands-on migration workshop: inventory, lineage, incremental loads, validation and cutover, on a synthetic Snowflake account.",
+  },
+  {
     slug: "helsinki-data-week-2026",
     title: "The Future of Data Teams",
     eyebrow: "Helsinki Data Week · October 2026",
