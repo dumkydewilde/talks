@@ -411,6 +411,7 @@ title: "Exercise A: Read the query history"
 class: exercise-slide
 section: 01 · DECIDE
 step: 1
+dive: https://app.motherduck.com/dives/data-outpost-exercise-a-what-the-warehouse-does-1a9433d3-d757-425b-8097-61d46f572062/presentation
 ---
 
 <div class="exercise-head">
@@ -501,6 +502,7 @@ title: "Exercise B: Build the inventory"
 class: exercise-slide
 section: 02 · INVENTORY
 step: 2
+dive: https://app.motherduck.com/dives/data-outpost-exercise-b-everything-duckoffee-owns-1196b18f-3e3a-4f13-ac5d-c202ca9a018d/presentation
 ---
 
 <div class="exercise-head">

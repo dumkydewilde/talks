@@ -2,7 +2,7 @@
 import { useSlideContext } from '@slidev/client'
 import { asset } from '../config'
 // Slidev passes slide frontmatter to layouts as props.
-const props = defineProps<{ section?: string; step?: number }>()
+const props = defineProps<{ section?: string; step?: number; dive?: string }>()
 // The 8 migration steps, shown as a slim "you are here" strip when a slide sets `step:`.
 const steps = ['Decide', 'Inventory', 'Strategy', 'Group', 'Infra', 'Move', 'Validate', 'Cut over']
 const { $page: currentPage } = useSlideContext()
@@ -20,7 +20,16 @@ const { $page: currentPage } = useSlideContext()
     <main class="slide-content"><slot /></main>
     <footer class="deck-footer">
       <span>DUMKY DE WILDE <span class="footer-slash">/</span> MOTHERDUCK</span>
-      <span>{{ String(currentPage).padStart(2, '0') }} <span class="footer-slash">/</span> {{ props.section ?? 'MIGRATING TO MOTHERDUCK' }}</span>
+      <span class="footer-right">
+        <a v-if="props.dive" class="dive-link" :href="props.dive" target="_blank" rel="noopener noreferrer">OPEN THE DIVE ↗</a>
+        <span>{{ String(currentPage).padStart(2, '0') }} <span class="footer-slash">/</span> {{ props.section ?? 'MIGRATING TO MOTHERDUCK' }}</span>
+      </span>
     </footer>
   </div>
 </template>
+
+<style scoped>
+.footer-right { display: flex; align-items: baseline; gap: 14px; }
+.md-slide .dive-link { font-size: 9px; color: var(--muted); border-bottom: 1px solid var(--rule); }
+.md-slide .dive-link:hover { color: var(--ink); border-bottom-color: var(--ink); }
+</style>
