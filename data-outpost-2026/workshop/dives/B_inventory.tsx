@@ -45,7 +45,7 @@ function Pixel({ text, size, color = COLORS.ink, shadow, label = true }: { text:
 
 const COLORS = {
   cream: "#E8E1D4", paper: "#F6F2EA", ink: "#050505", ink70: "#4A4642", faint: "#7D776E", rule: "#C9C0B0",
-  pink: "#FF74DA", pinkSoft: "#FFBAE3", yellow: "#EFDF00", yellowSoft: "#F7EE8C", steel: "#5E5E5E",
+  pink: "#FF74DA", pinkDeep: "#FF30C8", pinkSoft: "#FFBAE3", yellow: "#EFDF00", yellowSoft: "#F7EE8C", steel: "#5E5E5E",
 } as const;
 const FONTS = {
   mono: `"Martian Mono", ui-monospace, Menlo, Consolas, monospace`,

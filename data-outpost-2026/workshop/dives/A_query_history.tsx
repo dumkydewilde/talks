@@ -1,8 +1,9 @@
-import { useSQLQuery } from "@motherduck/react-sql-query";
-import { ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } from "recharts";
+import { useEffect, useRef, useState } from "react";
+import { useSQLQuery, useDiveState } from "@motherduck/react-sql-query";
+import { ResponsiveContainer, ComposedChart, BarChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } from "recharts";
 
-// Exercise A solution Dive: what does Duckoffee's warehouse do all day?
-// Data: the DuckGen warehouse-lineage share (release 20261103-bae5bc27-s-r1).
+// Exercise A solution Dive, in five steps: what's in the logs, what happens over time, who reads what,
+// how the tables connect, and what breaks. Data: the DuckGen warehouse-lineage share (release 20261103-bae5bc27-s-r1).
 export const REQUIRED_DATABASES = [
   {
     type: "share",
@@ -11,7 +12,8 @@ export const REQUIRED_DATABASES = [
   },
 ];
 
-const T = (name: string) => `"devtools_duckoffee_warehouse_lineage"."main"."${name}"`;
+const DB = "devtools_duckoffee_warehouse_lineage";
+const T = (name: string) => `"${DB}"."main"."${name}"`;
 
 // Data Outpost look (dataoutpost.ai): cream paper, ink type, pink + yellow blocks, 2px ink borders, hard shadows.
 // The Dive sandbox blocks external and data: fonts, so the VT323 pixel lettering is drawn as SVG paths
@@ -45,7 +47,7 @@ function Pixel({ text, size, color = COLORS.ink, shadow, label = true }: { text:
 
 const COLORS = {
   cream: "#E8E1D4", paper: "#F6F2EA", ink: "#050505", ink70: "#4A4642", faint: "#7D776E", rule: "#C9C0B0",
-  pink: "#FF74DA", pinkSoft: "#FFBAE3", yellow: "#EFDF00", yellowSoft: "#F7EE8C", steel: "#5E5E5E",
+  pink: "#FF74DA", pinkDeep: "#FF30C8", pinkSoft: "#FFBAE3", yellow: "#EFDF00", yellowSoft: "#F7EE8C", steel: "#5E5E5E",
 } as const;
 const FONTS = {
   mono: `"Martian Mono", ui-monospace, Menlo, Consolas, monospace`,
@@ -144,26 +146,363 @@ const tooltipStyle: React.CSSProperties = { background: COLORS.paper, border: `2
 const page: React.CSSProperties = { background: COLORS.cream, color: COLORS.ink, fontFamily: FONTS.mono, minHeight: "100%", padding: "28px 32px" };
 
 const N = (v: unknown): number => (v == null ? 0 : Number(v));
+const S = (v: unknown): string => (v == null ? "" : String(v));
 const rowsOf = (q: { data?: unknown }) => (Array.isArray(q.data) ? (q.data as Record<string, unknown>[]) : []);
+const fmt = (n: number, d = 0) => n.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
 const hhmm = (h: number) => {
   const m = Math.round(h * 60);
   return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 };
 
+const STEPS = [
+  { n: "01", title: "What's in there", sub: "the logs, and the warehouse they describe" },
+  { n: "02", title: "Over time", sub: "when data lands, when people look" },
+  { n: "03", title: "Readers", sub: "who reads what, and does dbt know" },
+  { n: "04", title: "Lineage", sub: "how the tables connect" },
+  { n: "05", title: "Errors + dead ends", sub: "what breaks, what nobody reads" },
+];
+
+const WHS = ["TRANSFORM_WH", "BI_WH", "APP_WH", "ADHOC_WH"] as const;
+const WH_COLOR: Record<string, string> = { TRANSFORM_WH: COLORS.ink, BI_WH: COLORS.pink, APP_WH: COLORS.yellow, ADHOC_WH: COLORS.pinkSoft };
+
+// ---------- shared bits ----------
+
 function Kpi({ loading, value, label, note, bg = COLORS.paper }: { loading: boolean; value: string; label: string; note?: string; bg?: string }) {
   return (
     <div style={{ ...card(), background: bg }}>
       <Label>{label}</Label>
-      {loading ? <div className="animate-pulse" style={{ height: 56, width: 110, marginTop: 8, background: COLORS.rule }} /> : (
-        <div style={{ marginTop: 14 }}><Pixel text={value} size={48} /></div>
+      {loading ? <div className="animate-pulse" style={{ height: 48, width: 110, marginTop: 14, background: COLORS.rule }} /> : (
+        <div style={{ marginTop: 14 }}><Pixel text={value} size={44} /></div>
       )}
-      {note && <p style={{ fontSize: 11, color: COLORS.ink, marginTop: 6, lineHeight: 1.4 }}>{note}</p>}
+      {note && <p style={{ fontSize: 11, marginTop: 8, lineHeight: 1.4 }}>{note}</p>}
     </div>
   );
 }
 
-export default function ExerciseADive() {
-  // KPI: nightly completion before/after the break, and stale morning reads since.
+function Sub({ label, title, children }: { label: string; title: string; children?: React.ReactNode }) {
+  return (
+    <div style={{ marginTop: 40, marginBottom: 14 }}>
+      <Label>{label}</Label>
+      <h3 style={{ fontSize: 15, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", marginTop: 6 }}>{title}</h3>
+      {children && <p style={{ fontSize: 12, color: COLORS.ink70, marginTop: 6, lineHeight: 1.55, maxWidth: 900 }}>{children}</p>}
+    </div>
+  );
+}
+
+function Swatch({ color, line, dash }: { color: string; line?: boolean; dash?: string }) {
+  if (line) {
+    return <svg width="24" height="8" aria-hidden><line x1="0" y1="4" x2="24" y2="4" stroke={color} strokeWidth={2.5} strokeDasharray={dash} /></svg>;
+  }
+  return <span style={{ display: "inline-block", width: 11, height: 11, background: color, border: `1.5px solid ${COLORS.ink}` }} />;
+}
+
+function Legend({ items }: { items: { label: string; color: string; line?: boolean; dash?: string }[] }) {
+  return (
+    <div className="flex flex-wrap gap-5" style={{ fontSize: 11, marginTop: 10 }}>
+      {items.map((it) => <span key={it.label} className="flex items-center gap-2"><Swatch {...it} />{it.label}</span>)}
+    </div>
+  );
+}
+
+function Stepper({ step, setStep }: { step: number; setStep: (n: number) => void }) {
+  return (
+    <nav className="grid gap-3" style={{ marginTop: 28, gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))" }} aria-label="Steps">
+      {STEPS.map((s, i) => {
+        const active = i === step;
+        return (
+          <button
+            key={s.n}
+            onClick={() => setStep(i)}
+            aria-current={active ? "step" : undefined}
+            style={{
+              textAlign: "left", padding: "10px 12px", border: `2px solid ${COLORS.ink}`, cursor: "pointer", color: COLORS.ink, fontFamily: FONTS.mono,
+              background: active ? COLORS.pink : i < step ? COLORS.yellowSoft : COLORS.paper,
+              boxShadow: active ? "none" : `4px 4px 0 ${COLORS.ink}`, transform: active ? "translate(4px, 4px)" : "none",
+            }}
+          >
+            <div className="flex items-center gap-2"><Pixel text={s.n} size={16} label={false} /><span style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>{s.title}</span></div>
+            <div style={{ fontSize: 10, color: COLORS.ink70, marginTop: 5, lineHeight: 1.35 }}>{s.sub}</div>
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+
+function StepNav({ step, setStep }: { step: number; setStep: (n: number) => void }) {
+  const btn = (label: string, to: number, primary?: boolean) => (
+    <button onClick={() => setStep(to)} style={{ padding: "8px 14px", border: `2px solid ${COLORS.ink}`, background: primary ? COLORS.pink : COLORS.paper, boxShadow: `4px 4px 0 ${COLORS.ink}`, cursor: "pointer", fontFamily: FONTS.mono, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.06em", color: COLORS.ink }}>
+      {label}
+    </button>
+  );
+  return (
+    <div className="flex justify-between items-center" style={{ marginTop: 44 }}>
+      <div>{step > 0 && btn(`← ${STEPS[step - 1].n} ${STEPS[step - 1].title}`, step - 1)}</div>
+      <div>{step < STEPS.length - 1 && btn(`${STEPS[step + 1].n} ${STEPS[step + 1].title} →`, step + 1, true)}</div>
+    </div>
+  );
+}
+
+// ---------- graph: HTML cards in columns, SVG edges measured from the DOM so cards can expand ----------
+
+type GNode = { id: string; col: number; content: React.ReactNode };
+type GEdge = { from: string; to: string; kind: string; label?: string };
+type Box = { x: number; y: number; w: number; h: number };
+
+const EDGE: Record<string, { stroke: string; width: number; dash?: string }> = {
+  key: { stroke: COLORS.ink, width: 1.5 },
+  declared: { stroke: COLORS.ink, width: 2 },
+  undeclared: { stroke: COLORS.pinkDeep, width: 2.5, dash: "7 5" },
+  unseen: { stroke: COLORS.faint, width: 1.75, dash: "2 4" },
+  adhoc: { stroke: "#B3A993", width: 1.25 },
+};
+
+function Graph({ nodes, edges, colWidth = 220, colGap = 80 }: { nodes: GNode[]; edges: GEdge[]; colWidth?: number; colGap?: number }) {
+  const outer = useRef<HTMLDivElement>(null);
+  const wrap = useRef<HTMLDivElement>(null);
+  const els = useRef(new Map<string, HTMLDivElement>());
+  const [avail, setAvail] = useState(0);
+  useEffect(() => {
+    const el = outer.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setAvail(el.clientWidth));
+    ro.observe(el);
+    setAvail(el.clientWidth);
+    return () => ro.disconnect();
+  }, []);
+  const [geo, setGeo] = useState<{ w: number; h: number; r: Record<string, Box> }>({ w: 0, h: 0, r: {} });
+  const cols: GNode[][] = [];
+  nodes.forEach((n) => { (cols[n.col] ??= []).push(n); });
+  // shrink columns and gaps to fit the card; below 140px per column, scroll sideways instead
+  const nc = Math.max(cols.length, 1);
+  const gap = avail ? Math.min(colGap, Math.max(40, (avail - 70 - nc * 140) / Math.max(nc - 1, 1))) : colGap;
+  const cw = avail ? Math.max(140, Math.min(colWidth, (avail - 70 - gap * (nc - 1)) / nc)) : colWidth;
+
+  const sig = nodes.map((n) => `${n.id}@${n.col}`).join("|");
+
+  useEffect(() => {
+    const el = wrap.current;
+    if (!el) return;
+    let last = "";
+    const measure = () => {
+      const b = el.getBoundingClientRect();
+      const r: Record<string, Box> = {};
+      els.current.forEach((n, id) => {
+        const q = n.getBoundingClientRect();
+        r[id] = { x: q.left - b.left, y: q.top - b.top, w: q.width, h: q.height };
+      });
+      const next = { w: el.scrollWidth, h: el.scrollHeight, r };
+      const key = JSON.stringify(next);
+      if (key !== last) { last = key; setGeo(next); }
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    els.current.forEach((n) => ro.observe(n));
+    return () => ro.disconnect();
+  }, [sig, cw, gap]);
+
+  const paths = edges.map((e, i) => {
+    const a = geo.r[e.from], b = geo.r[e.to];
+    if (!a || !b) return null;
+    const ay = a.y + Math.min(a.h / 2, 26), by = b.y + Math.min(b.h / 2, 26);
+    const st = EDGE[e.kind] ?? EDGE.key;
+    let d: string, lx: number, ly: number;
+    if (Math.abs(a.x - b.x) < 4) {
+      const x = a.x + a.w, bend = 46;
+      d = `M ${x} ${ay} C ${x + bend} ${ay}, ${x + bend} ${by}, ${x + 6} ${by}`;
+      lx = x + bend * 0.78; ly = (ay + by) / 2;
+    } else {
+      const x1 = a.x + a.w, x2 = b.x - 6, dx = (x2 - x1) / 2;
+      d = `M ${x1} ${ay} C ${x1 + dx} ${ay}, ${x2 - dx} ${by}, ${x2} ${by}`;
+      lx = (x1 + x2) / 2; ly = (ay + by) / 2;
+    }
+    return { d, st, kind: e.kind, label: e.label, lx, ly, i };
+  }).filter(Boolean) as { d: string; st: { stroke: string; width: number; dash?: string }; kind: string; label?: string; lx: number; ly: number; i: number }[];
+
+  return (
+    <div ref={outer} style={{ overflowX: "auto", paddingBottom: 8 }}>
+      <div ref={wrap} style={{ position: "relative", display: "inline-block", minWidth: "100%", padding: "6px 52px 6px 6px" }}>
+        <svg width={geo.w} height={geo.h} style={{ position: "absolute", left: 0, top: 0, pointerEvents: "none", overflow: "visible" }} aria-hidden>
+          <defs>
+            {Object.entries(EDGE).map(([k, st]) => (
+              <marker key={k} id={`arrow-${k}`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill={st.stroke} />
+              </marker>
+            ))}
+          </defs>
+          {paths.map((p) => (
+            <path key={p.i} d={p.d} fill="none" stroke={p.st.stroke} strokeWidth={p.st.width} strokeDasharray={p.st.dash} markerEnd={`url(#arrow-${p.kind})`} />
+          ))}
+        </svg>
+        <div className="flex items-center" style={{ position: "relative", gap }}>
+          {cols.map((col, ci) => (
+            <div key={ci} className="flex flex-col" style={{ gap: 16, width: cw, flexShrink: 0 }}>
+              {(col ?? []).map((n) => (
+                <div key={n.id} ref={(el) => { if (el) els.current.set(n.id, el); else els.current.delete(n.id); }}>{n.content}</div>
+              ))}
+            </div>
+          ))}
+        </div>
+        <svg width={geo.w} height={geo.h} style={{ position: "absolute", left: 0, top: 0, pointerEvents: "none", overflow: "visible" }} aria-hidden>
+          {paths.filter((p) => p.label).map((p) => {
+            const w = (p.label as string).length * 6 + 10;
+            return (
+              <g key={`l${p.i}`} transform={`translate(${p.lx - w / 2} ${p.ly - 8})`}>
+                <rect width={w} height={16} fill={COLORS.cream} stroke={COLORS.ink} strokeWidth={1} />
+                <text x={w / 2} y={11.5} textAnchor="middle" fontSize={9.5} fontFamily={FONTS.mono} fill={COLORS.ink}>{p.label}</text>
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+    </div>
+  );
+}
+
+// ---------- step 01: what's in there ----------
+
+const SHARE: Record<string, { what: string; keys: string[]; used: string[]; steps: string[]; col: number }> = {
+  sessions: { col: 0, what: "One row per session: which client opened it (JDBC, dbt, web UI, Python).", keys: ["session_id"], used: ["user_name", "client_application_id"], steps: ["03"] },
+  query_history: { col: 1, what: "One row per query: who ran it, on which warehouse, with which query_tag, and whether it failed.", keys: ["query_id", "session_id", "query_tag"], used: ["user_name", "warehouse_name", "start_time", "query_type", "execution_status", "error_code", "error_message"], steps: ["02", "03", "05"] },
+  access_history: { col: 2, what: "Which tables each query read and wrote, as JSON arrays of objects.", keys: ["query_id"], used: ["user_name", "query_start_time", "base_objects_accessed", "direct_objects_accessed", "objects_modified"], steps: ["03", "04", "05"] },
+  query_metering_history: { col: 2, what: "Credits per query: the cost side of every query.", keys: ["query_id"], used: ["warehouse_name", "start_time", "credits_used_compute"], steps: ["02", "03", "05"] },
+  dbt_run_results: { col: 2, what: "One row per model per run: duration, rows, and the query it ran.", keys: ["query_id", "unique_id", "invocation_id"], used: ["name", "execution_time", "rows_affected", "execute_started_at", "full_refresh"], steps: ["02", "05"] },
+  dbt_exposures: { col: 2, what: "Declared consumers: dashboards and apps, and the models they say they use.", keys: ["name", "depends_on_nodes"], used: ["type", "owner_name"], steps: ["03", "04"] },
+  account_tables: { col: 3, what: "Every table in the account: owner, rows, bytes, dropped date. comment holds the dbt node.", keys: ["table_id", "comment"], used: ["table_catalog", "table_schema", "table_name", "table_owner", "row_count", "bytes", "deleted"], steps: ["01", "04", "05"] },
+  dbt_models: { col: 3, what: "The dbt project: one row per model and the parents it declares.", keys: ["unique_id"], used: ["name", "database_name", "schema_name", "materialization", "depends_on_nodes"], steps: ["03", "04"] },
+  dbt_invocations: { col: 3, what: "One row per dbt run: when the nightly build started and finished.", keys: ["invocation_id"], used: ["run_started_at", "run_completed_at"], steps: ["02"] },
+};
+
+const SHARE_EDGES: GEdge[] = [
+  { from: "sessions", to: "query_history", kind: "key", label: "session_id" },
+  { from: "query_history", to: "access_history", kind: "key", label: "query_id" },
+  { from: "query_history", to: "query_metering_history", kind: "key", label: "query_id" },
+  { from: "query_history", to: "dbt_run_results", kind: "key", label: "query_id" },
+  { from: "query_history", to: "dbt_exposures", kind: "key", label: "query_tag" },
+  { from: "access_history", to: "account_tables", kind: "key", label: "table_id" },
+  { from: "dbt_run_results", to: "dbt_models", kind: "key", label: "unique_id" },
+  { from: "dbt_run_results", to: "dbt_invocations", kind: "key", label: "invocation_id" },
+  { from: "dbt_exposures", to: "dbt_models", kind: "key", label: "depends_on" },
+  { from: "account_tables", to: "dbt_models", kind: "key", label: "comment" },
+];
+
+function ShareCard({ name, rows, columns, open, onToggle }: { name: string; rows: number; columns: { name: string; type: string }[]; open: boolean; onToggle: () => void }) {
+  const meta = SHARE[name];
+  return (
+    <div style={{ background: COLORS.paper, border: `2px solid ${COLORS.ink}`, boxShadow: `4px 4px 0 ${open ? COLORS.pink : COLORS.ink}` }}>
+      <button onClick={onToggle} aria-expanded={open} style={{ display: "block", width: "100%", textAlign: "left", padding: "10px 12px", cursor: "pointer", background: open ? COLORS.yellow : "transparent", fontFamily: FONTS.mono, color: COLORS.ink }}>
+        <div className="flex items-center justify-between gap-2">
+          <span style={{ fontSize: 12.5, fontWeight: 600 }}>{name}</span>
+          <span style={{ fontSize: 10, border: `1.5px solid ${COLORS.ink}`, padding: "0 5px", background: COLORS.paper }}>{open ? "− schema" : "+ schema"}</span>
+        </div>
+        <div style={{ fontSize: 10, color: COLORS.ink70, marginTop: 3 }}>{fmt(rows)} rows · {columns.length} columns</div>
+        <div style={{ fontSize: 10.5, marginTop: 6, lineHeight: 1.45 }}>{meta.what}</div>
+        <div className="flex flex-wrap gap-1" style={{ marginTop: 8 }}>{meta.steps.map((s) => <Chip key={s} bg={COLORS.pinkSoft}>{`step ${s}`}</Chip>)}</div>
+      </button>
+      {open && (
+        <div style={{ borderTop: `2px solid ${COLORS.ink}`, padding: "6px 0", maxHeight: 330, overflowY: "auto" }}>
+          {columns.map((c) => {
+            const key = meta.keys.includes(c.name), used = meta.used.includes(c.name);
+            return (
+              <div key={c.name} className="flex justify-between gap-2" style={{ padding: "2px 12px", fontSize: 10, lineHeight: 1.6, background: key ? COLORS.pink : used ? COLORS.yellowSoft : undefined }}>
+                <span style={{ wordBreak: "break-all" }}>{c.name}</span>
+                <span style={{ color: key ? COLORS.ink : COLORS.faint, flexShrink: 0 }}>{c.type.toLowerCase()}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const LAYERS = ["raw", "staging", "intermediate", "marts", "looker pdts"];
+const LAYER_COLOR: Record<string, string> = { raw: COLORS.paper, staging: COLORS.pinkSoft, intermediate: COLORS.yellowSoft, marts: COLORS.pink, "looker pdts": COLORS.yellow };
+const LAYER_SQL = `CASE WHEN table_catalog LIKE 'RAW%' THEN 'raw' WHEN table_schema = 'STAGING' THEN 'staging'
+  WHEN table_schema = 'INTERMEDIATE' THEN 'intermediate' WHEN table_schema = 'LOOKER_SCRATCH' THEN 'looker pdts' ELSE 'marts' END`;
+
+function StepLogs() {
+  const tables = useSQLQuery(`SELECT table_name, estimated_size AS row_count FROM duckdb_tables() WHERE database_name = '${DB}' AND schema_name = 'main'`);
+  const columns = useSQLQuery(`SELECT table_name, column_name, data_type FROM duckdb_columns() WHERE database_name = '${DB}' AND schema_name = 'main' ORDER BY table_name, column_index`);
+  const span = useSQLQuery(`
+    SELECT strftime(min(start_time), '%Y-%m-%d') AS first_day, strftime(max(start_time), '%Y-%m-%d') AS last_day,
+      count(*) AS queries, count(DISTINCT user_name) AS users,
+      (SELECT sum(credits_used_compute) FROM ${T("query_metering_history")}) AS credits,
+      (SELECT count(*) FROM ${T("dbt_models")}) AS models, (SELECT count(*) FROM ${T("dbt_exposures")}) AS exposures
+    FROM ${T("query_history")}
+  `);
+  const layers = useSQLQuery(`
+    SELECT ${LAYER_SQL} AS layer, count(*) AS tables, sum(bytes) / 1e9 AS gb, sum(row_count) / 1e6 AS mrows,
+      string_agg(DISTINCT table_owner, ', ') AS owners, count(DISTINCT table_catalog || '.' || table_schema) AS schemas,
+      count(*) FILTER (WHERE deleted < TIMESTAMP '9999-01-01') AS dropped
+    FROM ${T("account_tables")} GROUP BY 1
+  `);
+  const [open, setOpen] = useState<string[]>([]);
+  const toggle = (n: string) => setOpen((o) => (o.includes(n) ? o.filter((x) => x !== n) : [...o, n]));
+
+  const k = rowsOf(span)[0] ?? {};
+  const rowCount = new Map(rowsOf(tables).map((r) => [S(r.table_name), N(r.row_count)]));
+  const colsBy = new Map<string, { name: string; type: string }[]>();
+  rowsOf(columns).forEach((r) => {
+    const t = S(r.table_name);
+    if (!colsBy.has(t)) colsBy.set(t, []);
+    colsBy.get(t)!.push({ name: S(r.column_name), type: S(r.data_type) });
+  });
+  const layerRows = new Map(rowsOf(layers).map((r) => [S(r.layer), r]));
+  const graphNodes: GNode[] = Object.keys(SHARE).map((name) => ({
+    id: name, col: SHARE[name].col,
+    content: <ShareCard name={name} rows={rowCount.get(name) ?? 0} columns={colsBy.get(name) ?? []} open={open.includes(name)} onToggle={() => toggle(name)} />,
+  }));
+
+  return (
+    <div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-5" style={{ marginTop: 32 }}>
+        <Kpi loading={span.isLoading} bg={COLORS.pink} value={fmt(N(k.queries))} label="queries logged" note={`${S(k.first_day)} → ${S(k.last_day)}`} />
+        <Kpi loading={span.isLoading} bg={COLORS.yellow} value={fmt(N(k.credits))} label="credits spent" note="query_metering_history, all warehouses" />
+        <Kpi loading={layers.isLoading} value={String(rowsOf(layers).reduce((s, r) => s + N(r.tables), 0))} label="tables in the account" note="account_tables: raw → staging → marts" />
+        <Kpi loading={span.isLoading} bg={COLORS.pinkSoft} value={`${N(k.models)}/${N(k.exposures)}`} label="dbt models / exposures" note={`${N(k.users)} users and service accounts ran queries`} />
+      </div>
+      {span.isError && <Alert error={span.error} />}
+
+      <Sub label="the logs · nine tables in the share" title="How the logs connect">
+        Everything in this exercise comes from these nine tables, the same ones Snowflake keeps in ACCOUNT_USAGE plus the dbt artifacts.
+        Lines are join keys. Click a table to see its columns: pink columns are keys, yellow ones are used in this exercise.
+      </Sub>
+      <div style={{ ...card(), padding: 14 }}>
+        {columns.isLoading ? <Skeleton h={420} /> : columns.isError ? <Alert error={columns.error} /> : <Graph nodes={graphNodes} edges={SHARE_EDGES} colWidth={214} colGap={82} />}
+        <Legend items={[{ label: "join key", color: COLORS.pink }, { label: "used in this exercise", color: COLORS.yellowSoft }]} />
+      </div>
+
+      <Sub label="what the logs describe" title="Duckoffee's warehouse, layer by layer">
+        account_tables lists every table the logs talk about. dbt builds staging, intermediate and marts every night from raw tables a loader fills; Looker keeps its own derived tables on the side.
+      </Sub>
+      {layers.isLoading ? <Skeleton h={130} /> : layers.isError ? <Alert error={layers.error} /> : (
+        <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))" }}>
+          {LAYERS.map((l, i) => {
+            const r = layerRows.get(l) ?? {};
+            return (
+              <div key={l} style={{ ...card(), background: LAYER_COLOR[l], position: "relative" }}>
+                <div className="flex justify-between items-center"><Label>{l}</Label>{i < 3 && <span style={{ fontSize: 14 }}>→</span>}</div>
+                <div style={{ marginTop: 12 }}><Pixel text={String(N(r.tables))} size={36} /></div>
+                <p style={{ fontSize: 10.5, marginTop: 8, lineHeight: 1.5 }}>
+                  tables in {N(r.schemas)} schema{N(r.schemas) === 1 ? "" : "s"}<br />
+                  {N(r.gb) < 0.05 ? "views, no storage" : `${fmt(N(r.gb), 1)} GB · ${fmt(N(r.mrows), 0)}M rows`}<br />
+                  owner {S(r.owners).toLowerCase()}
+                  {N(r.dropped) > 0 && <><br /><Mark bg={COLORS.pink}>{`${N(r.dropped)} dropped`}</Mark></>}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------- step 02: over time ----------
+
+function StepTime() {
   const kpis = useSQLQuery(`
     WITH inv AS (
       SELECT run_started_at, (epoch(run_completed_at) - epoch(run_completed_at::DATE)) / 3600 AS done_hour
@@ -172,14 +511,25 @@ export default function ExerciseADive() {
       SELECT (q.start_time < i.run_completed_at)::INTEGER AS stale
       FROM ${T("query_history")} q JOIN ${T("dbt_invocations")} i ON i.run_started_at::DATE = q.start_time::DATE
       WHERE q.query_tag = 'franchisee_morning_sales' AND q.start_time >= TIMESTAMP '2026-02-02'
-        AND strftime(q.start_time, '%H:%M') >= '06:30' AND strftime(q.start_time, '%H:%M') < '08:00')
+        AND strftime(q.start_time, '%H:%M') >= '06:30' AND strftime(q.start_time, '%H:%M') < '08:00'),
+    tw AS (
+      SELECT start_time >= TIMESTAMP '2026-02-02' AS after, sum(credits_used_compute) / count(DISTINCT start_time::DATE) AS per_day
+      FROM ${T("query_metering_history")} WHERE warehouse_name = 'TRANSFORM_WH' GROUP BY 1)
     SELECT
       (SELECT avg(done_hour) FROM inv WHERE run_started_at < TIMESTAMP '2026-02-02') AS done_before,
       (SELECT avg(done_hour) FROM inv WHERE run_started_at >= TIMESTAMP '2026-02-02') AS done_after,
-      (SELECT 100.0 * avg(stale) FROM reads) AS stale_pct
+      (SELECT 100.0 * avg(stale) FROM reads) AS stale_pct,
+      (SELECT per_day FROM tw WHERE NOT after) AS tw_before, (SELECT per_day FROM tw WHERE after) AS tw_after
   `);
-
-  // A1: nightly build completion per week, with the share of stale morning-dashboard reads.
+  const hourly = useSQLQuery(`
+    SELECT hour(start_time) AS h, warehouse_name AS wh,
+      count(*) / (SELECT count(DISTINCT start_time::DATE) FROM ${T("query_history")}) AS per_day
+    FROM ${T("query_history")} GROUP BY ALL ORDER BY 1
+  `);
+  const credits = useSQLQuery(`
+    SELECT strftime(date_trunc('week', start_time), '%Y-%m-%d') AS week, warehouse_name AS wh, sum(credits_used_compute) AS credits
+    FROM ${T("query_metering_history")} GROUP BY ALL ORDER BY 1
+  `);
   const weekly = useSQLQuery(`
     WITH wk AS (
       SELECT date_trunc('week', run_started_at)::DATE AS week,
@@ -194,15 +544,136 @@ export default function ExerciseADive() {
     SELECT strftime(week, '%Y-%m-%d') AS week, done_hour, coalesce(stale_pct, 0) AS stale_pct
     FROM wk LEFT JOIN st USING (week) ORDER BY week
   `);
-
-  // A1 culprit: fct_ticket_lines minutes and rows per run, before and after.
   const culprit = useSQLQuery(`
     SELECT CASE WHEN execute_started_at < TIMESTAMP '2026-02-02' THEN 'before 2026-02-02' ELSE 'since 2026-02-02' END AS period,
       avg(execution_time) / 60 AS minutes, avg(rows_affected) / 1e6 AS million_rows
     FROM ${T("dbt_run_results")} WHERE name = 'fct_ticket_lines' GROUP BY 1 ORDER BY 1
   `);
 
-  // A2: observed reads (since 2026-01-01) that dbt models or exposures do not declare.
+  const k = rowsOf(kpis)[0] ?? {};
+  const pivot = (rows: Record<string, unknown>[], key: string, val: string) => {
+    const m = new Map<string, Record<string, number | string>>();
+    rows.forEach((r) => {
+      const id = S(r[key]);
+      if (!m.has(id)) m.set(id, { [key]: id });
+      m.get(id)![S(r.wh)] = N(r[val]);
+    });
+    return [...m.values()];
+  };
+  const hours = pivot(rowsOf(hourly), "h", "per_day").map((r) => ({ ...r, label: `${String(r.h).padStart(2, "0")}:00` }));
+  const weeksCredits = pivot(rowsOf(credits), "week", "credits");
+  const weeks = rowsOf(weekly).map((r) => ({ week: S(r.week), done: N(r.done_hour), stale: N(r.stale_pct) }));
+  const whLegend = WHS.map((w) => ({ label: w.toLowerCase(), color: WH_COLOR[w] }));
+
+  return (
+    <div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-5" style={{ marginTop: 32 }}>
+        <Kpi loading={kpis.isLoading} bg={COLORS.pink} value={hhmm(N(k.done_after))} label="nightly build lands" note={`was ${hhmm(N(k.done_before))} until 2026-02-02`} />
+        <Kpi loading={kpis.isLoading} bg={COLORS.yellow} value={`${fmt(N(k.stale_pct))}%`} label="stale morning reads" note="franchisee dashboard, 06:30–08:00, since 2026-02-02" />
+        <Kpi loading={kpis.isLoading} value={fmt(N(k.tw_after), 1)} label="transform credits / day" note={`was ${fmt(N(k.tw_before), 1)} before 2026-02-02`} />
+        <Kpi loading={kpis.isLoading} bg={COLORS.pinkSoft} value="06:30" label="franchisees open" note="the deadline the nightly build has to beat" />
+      </div>
+      {kpis.isError && <Alert error={kpis.error} />}
+
+      <Sub label="signal · a day in the warehouse" title="Build at night, read at breakfast">
+        Average queries per hour of the day. TRANSFORM_WH (dbt and scheduled tasks) runs from 01:00 to 05:00; the BI tools peak between 07:00 and 09:00 when franchisees open their dashboards.
+      </Sub>
+      <div style={card()}>
+        {hourly.isLoading ? <Skeleton h={230} /> : hourly.isError ? <Alert error={hourly.error} /> : (
+          <ResponsiveContainer width="100%" height={230}>
+            <BarChart data={hours} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+              <CartesianGrid strokeDasharray="2 4" stroke={COLORS.rule} vertical={false} />
+              <XAxis dataKey="label" tick={axisTick} axisLine={{ stroke: COLORS.ink, strokeWidth: 2 }} tickLine={false} interval={1} />
+              <YAxis tick={axisTick} axisLine={false} tickLine={false} width={48} />
+              <Tooltip contentStyle={tooltipStyle} cursor={{ fill: COLORS.yellowSoft, fillOpacity: 0.5 }} formatter={(v: number, name: string) => [`${fmt(v)} queries/day`, name.toLowerCase()]} />
+              {WHS.map((w) => <Bar key={w} dataKey={w} stackId="a" fill={WH_COLOR[w]} stroke={COLORS.ink} strokeWidth={1} />)}
+            </BarChart>
+          </ResponsiveContainer>
+        )}
+        <Legend items={whLegend} />
+      </div>
+
+      <Sub label="signal · cost over time" title="Credits per week, by warehouse">
+        The transform bill jumps in the week of 2026-02-02 and stays up. The BI warehouses don't change: the extra cost is all in the nightly build.
+      </Sub>
+      <div style={card()}>
+        {credits.isLoading ? <Skeleton h={230} /> : credits.isError ? <Alert error={credits.error} /> : (
+          <ResponsiveContainer width="100%" height={230}>
+            <BarChart data={weeksCredits} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+              <CartesianGrid strokeDasharray="2 4" stroke={COLORS.rule} vertical={false} />
+              <XAxis dataKey="week" tick={axisTick} axisLine={{ stroke: COLORS.ink, strokeWidth: 2 }} tickLine={false} tickFormatter={(w: string) => w.slice(0, 7)} minTickGap={48} />
+              <YAxis tick={axisTick} axisLine={false} tickLine={false} width={48} />
+              <Tooltip contentStyle={tooltipStyle} cursor={{ fill: COLORS.yellowSoft, fillOpacity: 0.5 }} formatter={(v: number, name: string) => [`${fmt(v, 1)} credits`, name.toLowerCase()]} />
+              <ReferenceLine x="2026-02-02" stroke={COLORS.pinkDeep} strokeWidth={2} strokeDasharray="6 4" label={{ value: "2026-02-02", position: "insideTopLeft", fill: COLORS.ink, fontSize: 10, fontFamily: FONTS.mono }} />
+              {WHS.map((w) => <Bar key={w} dataKey={w} stackId="a" fill={WH_COLOR[w]} stroke={COLORS.ink} strokeWidth={1} />)}
+            </BarChart>
+          </ResponsiveContainer>
+        )}
+        <Legend items={whLegend} />
+      </div>
+
+      <Sub label="signal · loading patterns" title="The nightly build slipped past breakfast">
+        Weekly average time the dbt build finishes, against the share of morning dashboard reads that happen before it finished (and so show yesterday's numbers).
+      </Sub>
+      <div style={card()}>
+        {weekly.isLoading ? <Skeleton h={260} /> : weekly.isError ? <Alert error={weekly.error} /> : (
+          <ResponsiveContainer width="100%" height={260}>
+            <ComposedChart data={weeks} margin={{ top: 10, right: 8, bottom: 0, left: 0 }}>
+              <CartesianGrid strokeDasharray="2 4" stroke={COLORS.rule} vertical={false} />
+              <XAxis dataKey="week" tick={axisTick} axisLine={{ stroke: COLORS.ink, strokeWidth: 2 }} tickLine={false} tickFormatter={(w: string) => w.slice(0, 7)} minTickGap={48} />
+              <YAxis yAxisId="t" domain={[4, 9]} ticks={[4, 5, 6, 7, 8, 9]} tick={axisTick} axisLine={false} tickLine={false} tickFormatter={(v: number) => hhmm(v)} width={52} />
+              <YAxis yAxisId="p" orientation="right" domain={[0, 100]} tick={axisTick} axisLine={false} tickLine={false} tickFormatter={(v: number) => `${v}%`} width={44} />
+              <Tooltip
+                contentStyle={tooltipStyle} labelStyle={{ color: COLORS.ink70 }} cursor={{ fill: COLORS.yellowSoft, fillOpacity: 0.5 }}
+                formatter={(v: number, name: string) => (name === "done" ? [hhmm(v), "build done (avg)"] : [`${v.toFixed(1)}%`, "stale morning reads"])}
+              />
+              <Bar yAxisId="p" dataKey="stale" fill={COLORS.pink} stroke={COLORS.ink} strokeWidth={1.5} />
+              <ReferenceLine yAxisId="t" y={6.5} stroke={COLORS.ink} strokeDasharray="6 4" strokeWidth={1.5} label={{ value: "06:30 · franchisees open the dashboard", position: "insideTopLeft", fill: COLORS.ink, fontSize: 11, fontFamily: FONTS.mono }} />
+              <Line yAxisId="t" type="linear" dataKey="done" stroke={COLORS.ink} strokeWidth={3} dot={false} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        )}
+        <Legend items={[{ label: "nightly dbt build done (weekly avg)", color: COLORS.ink, line: true }, { label: "% of morning reads before the build finished", color: COLORS.pink }]} />
+      </div>
+
+      <div style={{ ...card(COLORS.yellow), marginTop: 28 }}>
+        <div className="flex items-center gap-2"><Label>suspect</Label><Chip bg={COLORS.ink} fg={COLORS.paper}>fct_ticket_lines</Chip></div>
+        {culprit.isLoading ? <Skeleton h={48} /> : culprit.isError ? <Alert error={culprit.error} /> : (
+          <div className="grid grid-cols-2 gap-6" style={{ marginTop: 12 }}>
+            {rowsOf(culprit).map((r, i) => (
+              <div key={S(r.period)}>
+                <Chip bg={i ? COLORS.pink : COLORS.yellowSoft}>{S(r.period)}</Chip>
+                <div style={{ marginTop: 10 }}><Pixel text={`${fmt(N(r.minutes))} min · ${fmt(N(r.million_rows), 1)}M rows/run`} size={26} /></div>
+              </div>
+            ))}
+          </div>
+        )}
+        <p style={{ fontSize: 11, color: COLORS.ink70, marginTop: 12 }}>
+          The is_incremental filter broke: every night is a full rebuild, while full_refresh stays false. Step 04 shows what sits downstream of it.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ---------- step 03: readers ----------
+
+const READER_SQL = `CASE WHEN user_name LIKE 'ANALYST_%' THEN 'ANALYST_01…12' ELSE user_name END`;
+
+function StepReaders() {
+  const readers = useSQLQuery(`
+    WITH q AS (
+      SELECT ${READER_SQL} AS reader, user_name, query_id, session_id, warehouse_name, query_tag FROM ${T("query_history")}),
+    tb AS (
+      SELECT ${READER_SQL} AS reader, count(DISTINCT o) AS tables
+      FROM ${T("access_history")}, unnest(json_extract_string(direct_objects_accessed, '$[*].objectName')) AS x(o) GROUP BY 1)
+    SELECT q.reader, count(DISTINCT q.user_name) AS people, string_agg(DISTINCT s.client_application_id, ', ') AS clients,
+      string_agg(DISTINCT q.warehouse_name, ', ') AS warehouses, count(*) AS queries,
+      string_agg(DISTINCT q.query_tag, ', ') AS tags, count(DISTINCT q.query_tag) AS n_tags,
+      sum(m.credits_used_compute) AS credits, any_value(tb.tables) AS tables
+    FROM q LEFT JOIN ${T("query_metering_history")} m USING (query_id) LEFT JOIN ${T("sessions")} s USING (session_id) LEFT JOIN tb USING (reader)
+    GROUP BY 1 ORDER BY queries DESC
+  `);
   const gaps = useSQLQuery(`
     WITH a AS (
       SELECT query_id, unnest(json_extract_string(base_objects_accessed, '$[*].objectId'))::INTEGER AS table_id
@@ -222,7 +693,359 @@ export default function ExerciseADive() {
     SELECT reader_type, reader, object_name, reads FROM obs WHERE NOT declared ORDER BY reads DESC, reader, object_name
   `);
 
-  // A3a: marts nobody but dbt has read since 2026-01-01, with their share of TRANSFORM_WH credits.
+  const rows = rowsOf(readers);
+  const total = rows.reduce((s, r) => s + N(r.queries), 0);
+  const service = rows.filter((r) => S(r.reader).endsWith("_SVC")).length;
+  const analysts = N(rows.find((r) => S(r.reader).startsWith("ANALYST"))?.people);
+  const gapRows = rowsOf(gaps);
+
+  return (
+    <div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-5" style={{ marginTop: 32 }}>
+        <Kpi loading={readers.isLoading} bg={COLORS.pink} value={String(service)} label="service accounts" note="looker, bi tool b, data app, dbt, tasks" />
+        <Kpi loading={readers.isLoading} bg={COLORS.yellow} value={String(analysts)} label="analysts" note="ad hoc queries from the web ui and python" />
+        <Kpi loading={gaps.isLoading} bg={COLORS.pinkSoft} value={String(gapRows.length)} label="undeclared reads" note="observed since 2026-01-01, not in dbt" />
+        <Kpi loading={readers.isLoading} value={`${fmt((100 * N(rows[0]?.queries)) / (total || 1))}%`} label="of queries from looker" note="one service account dominates the reads" />
+      </div>
+
+      <Sub label="recon · who queries the warehouse" title="Every reader, by queries">
+        One row per user; the twelve analysts are grouped. Client comes from sessions, credits from query_metering_history, tables from access_history.
+      </Sub>
+      <div style={{ ...card(), padding: 0, overflowX: "auto" }}>
+        {readers.isLoading ? <div style={{ padding: 16 }}><Skeleton h={220} /></div> : readers.isError ? <div style={{ padding: 16 }}><Alert error={readers.error} /></div> : (
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr>
+                <th style={th}>reader</th><th style={th}>client</th><th style={th}>warehouse</th>
+                <th style={{ ...th, textAlign: "right" }}>queries</th><th style={{ ...th, width: 140 }}>share</th>
+                <th style={{ ...th, textAlign: "right" }}>tables</th><th style={{ ...th, textAlign: "right" }}>credits</th><th style={th}>query tags</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => {
+                const share = (100 * N(r.queries)) / (total || 1);
+                return (
+                  <tr key={S(r.reader)}>
+                    <td style={{ ...td, whiteSpace: "nowrap", fontWeight: 600 }}>{S(r.reader)}{N(r.people) > 1 && <span style={{ fontWeight: 400, color: COLORS.ink70 }}> · {N(r.people)} people</span>}</td>
+                    <td style={{ ...td, color: COLORS.ink70 }}>{S(r.clients)}</td>
+                    <td style={{ ...td, color: COLORS.ink70 }}>{S(r.warehouses).toLowerCase()}</td>
+                    <td style={num}>{fmt(N(r.queries))}</td>
+                    <td style={td}><div style={{ height: 10, width: `${Math.max(share, 1)}%`, background: COLORS.pink, border: `1px solid ${COLORS.ink}` }} /></td>
+                    <td style={num}>{fmt(N(r.tables))}</td>
+                    <td style={num}>{fmt(N(r.credits), 1)}</td>
+                    <td style={{ ...td, fontSize: 10.5, color: COLORS.ink70, minWidth: 220 }}>{S(r.tags)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <Sub label="recon · lineage gaps" title="Reads nobody declared">
+        Reads observed in access_history since 2026-01-01 that are missing from dbt_models.depends_on_nodes or dbt_exposures. Step 04 draws them as pink dashed lines.
+      </Sub>
+      <div style={{ ...card(), padding: 0 }}>
+        {gaps.isLoading ? <div style={{ padding: 16 }}><Skeleton h={200} /></div> : gaps.isError ? <div style={{ padding: 16 }}><Alert error={gaps.error} /></div> : (
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead><tr><th style={th}>reader</th><th style={th}>reads table</th><th style={{ ...th, textAlign: "right" }}>reads</th></tr></thead>
+            <tbody>
+              {gapRows.map((r, i) => {
+                const gone = S(r.object_name).startsWith("RAW_POS.PUBLIC.TICKETS");
+                return (
+                  <tr key={i}>
+                    <td style={td}><span style={{ color: COLORS.faint }}>{S(r.reader_type)} · </span>{S(r.reader)}</td>
+                    <td style={td}>{gone ? <Mark bg={COLORS.pink}>{S(r.object_name)}</Mark> : S(r.object_name)}</td>
+                    <td style={num}>{fmt(N(r.reads))}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------- step 04: lineage ----------
+
+type LTable = { fqn: string; owner: string; rows: number; gb: number; dropped: boolean; droppedOn: string; uid: string; materialization: string; consumerReads: number; dbtReads: number; lastRead: string; buildCredits: number };
+type LConsumer = { id: string; users: string; people: number; clients: string; queries: number; failed: number; exposure: string; expoType: string; expoOwner: string };
+type LNode = { id: string; kind: "table" | "consumer"; layer: string; table?: LTable; consumer?: LConsumer };
+
+const FOCUS_PRESETS: [string, string][] = [
+  ["MARTS.OPS.FCT_TICKET_LINES", "fct_ticket_lines"],
+  ["franchisee_morning_sales", "franchisee dashboard"],
+  ["RAW_POS.PUBLIC.TICKETS", "dropped raw tickets"],
+  ["marketing_campaigns", "marketing dashboard"],
+  ["royalty_statements", "royalty app"],
+];
+
+const consumerPrefix = (c?: LConsumer) => {
+  const u = c?.users ?? "";
+  if (c?.id === "adhoc") return "analysts";
+  if (u.includes("LOOKER")) return "looker";
+  if (u.includes("BI_TOOL_B")) return "bi tool b";
+  if (u.includes("DATA_APP")) return "data app";
+  if (u.includes("TASK")) return "scheduled task";
+  return "consumer";
+};
+
+function Detail({ k, v }: { k: string; v: React.ReactNode }) {
+  return (
+    <div className="flex flex-wrap justify-between" style={{ columnGap: 6, borderTop: `1px dotted ${COLORS.rule}`, padding: "2px 0" }}>
+      <dt style={{ color: COLORS.ink70 }}>{k}</dt>
+      <dd style={{ marginLeft: "auto", textAlign: "right", overflowWrap: "anywhere" }}>{v}</dd>
+    </div>
+  );
+}
+
+function LineageCard({ node, isFocus, open, onToggle, onFocus }: { node: LNode; isFocus: boolean; open: boolean; onToggle: () => void; onFocus: () => void }) {
+  const t = node.table, c = node.consumer;
+  const parts = node.id.split(".");
+  const title = node.kind === "table" ? parts[parts.length - 1] : node.id;
+  const subtitle = node.kind === "table" ? `${parts.slice(0, 2).join(".")} · ${node.layer}` : `${consumerPrefix(c)}${c?.exposure ? ` · ${c.expoType}` : ""}`;
+  const bg = isFocus ? COLORS.yellow : node.kind === "consumer" ? COLORS.pinkSoft : COLORS.paper;
+  return (
+    <div style={{ background: COLORS.paper, border: `2px solid ${COLORS.ink}`, boxShadow: `4px 4px 0 ${isFocus ? COLORS.pinkDeep : COLORS.ink}` }}>
+      <button onClick={onToggle} aria-expanded={open} style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 10px", background: bg, cursor: "pointer", fontFamily: FONTS.mono, color: COLORS.ink }}>
+        <div className="flex justify-between items-start gap-2">
+          <span style={{ fontSize: 11.5, fontWeight: 600, wordBreak: "break-all" }}>{title}</span>
+          <span style={{ fontSize: 11, fontWeight: 600 }}>{open ? "−" : "+"}</span>
+        </div>
+        <div style={{ fontSize: 9.5, color: COLORS.ink70, marginTop: 2 }}>{subtitle}</div>
+        {(t?.dropped || (c && c.failed > 0) || (c && !c.exposure && c.id !== "adhoc")) && (
+          <div className="flex flex-wrap gap-1" style={{ marginTop: 5 }}>
+            {t?.dropped && <Chip bg={COLORS.pink}>{`dropped ${t.droppedOn}`}</Chip>}
+            {c && c.failed > 0 && <Chip bg={COLORS.pink}>{`${fmt(c.failed)} failed`}</Chip>}
+            {c && !c.exposure && c.id !== "adhoc" && <Chip bg={COLORS.ink} fg={COLORS.paper}>not in dbt</Chip>}
+          </div>
+        )}
+      </button>
+      {open && (
+        <div style={{ borderTop: `2px solid ${COLORS.ink}`, padding: "8px 10px", fontSize: 10 }}>
+          <dl>
+            {t && <>
+              <Detail k="owner" v={t.owner.toLowerCase()} />
+              <Detail k="rows" v={fmt(t.rows)} />
+              <Detail k="size" v={`${fmt(t.gb, 2)} GB`} />
+              {t.materialization && <Detail k="dbt" v={t.materialization} />}
+              <Detail k="build credits" v={fmt(t.buildCredits, 1)} />
+              <Detail k="reads (non-dbt)" v={fmt(t.consumerReads)} />
+              <Detail k="reads by dbt" v={fmt(t.dbtReads)} />
+              <Detail k="last read" v={t.lastRead || "never"} />
+              {t.uid && <Detail k="node" v={t.uid.replace("duckoffee.", "")} />}
+            </>}
+            {c && <>
+              <Detail k="who" v={c.people > 3 ? `${c.people} analysts` : c.users.toLowerCase()} />
+              <Detail k="client" v={c.clients} />
+              <Detail k="queries" v={fmt(c.queries)} />
+              <Detail k="exposure" v={c.exposure ? `${c.expoType} · ${c.expoOwner}` : "none"} />
+            </>}
+          </dl>
+          {!isFocus && (
+            <button onClick={onFocus} style={{ marginTop: 8, width: "100%", padding: "4px 6px", border: `1.5px solid ${COLORS.ink}`, background: COLORS.yellow, cursor: "pointer", fontFamily: FONTS.mono, fontSize: 10, textTransform: "uppercase", color: COLORS.ink }}>
+              center lineage here
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StepLineage() {
+  const [focus, setFocus] = useDiveState<string>("focus", "MARTS.OPS.FCT_TICKET_LINES");
+  const [open, setOpen] = useState<string[]>([]);
+  const toggle = (n: string) => setOpen((o) => (o.includes(n) ? o.filter((x) => x !== n) : [...o, n]));
+
+  const edgesQ = useSQLQuery(`
+    WITH t AS (
+      SELECT table_catalog || '.' || table_schema || '.' || table_name AS fqn, replace(comment, 'dbt node ', '') AS uid FROM ${T("account_tables")}),
+    dep AS (
+      SELECT m.database_name || '.' || m.schema_name || '.' || upper(m.name) AS dst, u.uid
+      FROM ${T("dbt_models")} m, unnest(from_json(m.depends_on_nodes, '["VARCHAR"]')) AS u(uid)),
+    declared_build AS (SELECT DISTINCT t.fqn AS src, dep.dst FROM dep JOIN t USING (uid)),
+    expo AS (
+      SELECT e.name AS dst, u.uid FROM ${T("dbt_exposures")} e, unnest(from_json(e.depends_on_nodes, '["VARCHAR"]')) AS u(uid)),
+    declared_use AS (SELECT DISTINCT t.fqn AS src, expo.dst FROM expo JOIN t USING (uid)),
+    a AS (
+      SELECT query_id, json_extract_string(direct_objects_accessed, '$[*].objectName') AS reads,
+        json_extract_string(objects_modified, '$[*].objectName') AS writes
+      FROM ${T("access_history")} WHERE query_start_time >= TIMESTAMP '2026-01-01'),
+    obs_build AS (
+      SELECT DISTINCT r AS src, w AS dst FROM a, unnest(a.reads) AS x(r), unnest(a.writes) AS y(w) WHERE len(a.writes) > 0 AND r <> w),
+    obs_use AS (
+      SELECT DISTINCT r AS src, CASE WHEN q.user_name LIKE 'ANALYST_%' THEN 'adhoc' ELSE q.query_tag END AS dst
+      FROM a JOIN ${T("query_history")} q USING (query_id), unnest(a.reads) AS x(r)
+      WHERE len(a.writes) = 0 AND q.user_name <> 'DBT_SVC')
+    SELECT coalesce(o.src, d.src) AS src, coalesce(o.dst, d.dst) AS dst, 'table' AS dst_kind, o.src IS NOT NULL AS observed, d.src IS NOT NULL AS declared
+    FROM obs_build o FULL JOIN declared_build d ON o.src = d.src AND o.dst = d.dst
+    UNION ALL
+    SELECT coalesce(o.src, d.src), coalesce(o.dst, d.dst), 'consumer', o.src IS NOT NULL, d.src IS NOT NULL
+    FROM obs_use o FULL JOIN declared_use d ON o.src = d.src AND o.dst = d.dst
+  `);
+  const tablesQ = useSQLQuery(`
+    WITH r AS (
+      SELECT unnest(json_extract_string(direct_objects_accessed, '$[*].objectName')) AS fqn, user_name, query_start_time FROM ${T("access_history")}),
+    reads AS (
+      SELECT fqn, count(*) FILTER (WHERE user_name <> 'DBT_SVC') AS consumer_reads, count(*) FILTER (WHERE user_name = 'DBT_SVC') AS dbt_reads,
+        strftime(max(query_start_time) FILTER (WHERE user_name <> 'DBT_SVC'), '%Y-%m-%d') AS last_read
+      FROM r GROUP BY 1),
+    w AS (SELECT unnest(json_extract_string(objects_modified, '$[*].objectName')) AS fqn, query_id FROM ${T("access_history")}),
+    builds AS (SELECT w.fqn, sum(m.credits_used_compute) AS build_credits FROM w JOIN ${T("query_metering_history")} m USING (query_id) GROUP BY 1)
+    SELECT t.table_catalog || '.' || t.table_schema || '.' || t.table_name AS fqn, ${LAYER_SQL.replace(/table_/g, "t.table_")} AS layer,
+      t.table_owner, t.row_count, t.bytes / 1e9 AS gb, t.deleted < TIMESTAMP '9999-01-01' AS dropped, strftime(t.deleted, '%Y-%m-%d') AS dropped_on,
+      CASE WHEN t.comment LIKE 'dbt node %' THEN replace(t.comment, 'dbt node ', '') ELSE '' END AS uid, coalesce(dm.materialization, '') AS materialization,
+      coalesce(reads.consumer_reads, 0) AS consumer_reads, coalesce(reads.dbt_reads, 0) AS dbt_reads, coalesce(reads.last_read, '') AS last_read,
+      coalesce(builds.build_credits, 0) AS build_credits
+    FROM ${T("account_tables")} t
+    LEFT JOIN reads ON reads.fqn = t.table_catalog || '.' || t.table_schema || '.' || t.table_name
+    LEFT JOIN builds ON builds.fqn = t.table_catalog || '.' || t.table_schema || '.' || t.table_name
+    LEFT JOIN ${T("dbt_models")} dm ON 'dbt node ' || dm.unique_id = t.comment
+  `);
+  const consumersQ = useSQLQuery(`
+    SELECT CASE WHEN q.user_name LIKE 'ANALYST_%' THEN 'adhoc' ELSE q.query_tag END AS id,
+      string_agg(DISTINCT q.user_name, ', ') AS users, count(DISTINCT q.user_name) AS people,
+      string_agg(DISTINCT s.client_application_id, ', ') AS clients, count(*) AS queries,
+      count(*) FILTER (WHERE q.execution_status <> 'SUCCESS') AS failed,
+      coalesce(any_value(e.name), '') AS exposure, coalesce(any_value(e.type), '') AS expo_type, coalesce(any_value(e.owner_name), '') AS expo_owner
+    FROM ${T("query_history")} q LEFT JOIN ${T("sessions")} s USING (session_id) LEFT JOIN ${T("dbt_exposures")} e ON e.name = q.query_tag
+    WHERE q.user_name <> 'DBT_SVC' GROUP BY 1
+  `);
+
+  const loading = edgesQ.isLoading || tablesQ.isLoading || consumersQ.isLoading;
+  const error = edgesQ.error ?? tablesQ.error ?? consumersQ.error;
+
+  const nodes = new Map<string, LNode>();
+  rowsOf(tablesQ).forEach((r) => nodes.set(S(r.fqn), {
+    id: S(r.fqn), kind: "table", layer: S(r.layer),
+    table: {
+      fqn: S(r.fqn), owner: S(r.table_owner), rows: N(r.row_count), gb: N(r.gb), dropped: Boolean(r.dropped), droppedOn: S(r.dropped_on),
+      uid: S(r.uid), materialization: S(r.materialization), consumerReads: N(r.consumer_reads), dbtReads: N(r.dbt_reads), lastRead: S(r.last_read), buildCredits: N(r.build_credits),
+    },
+  }));
+  rowsOf(consumersQ).forEach((r) => nodes.set(S(r.id), {
+    id: S(r.id), kind: "consumer", layer: "consumer",
+    consumer: { id: S(r.id), users: S(r.users), people: N(r.people), clients: S(r.clients), queries: N(r.queries), failed: N(r.failed), exposure: S(r.exposure), expoType: S(r.expo_type), expoOwner: S(r.expo_owner) },
+  }));
+
+  const allEdges: GEdge[] = rowsOf(edgesQ).map((r) => {
+    const dst = S(r.dst), declared = Boolean(r.declared), observed = Boolean(r.observed);
+    let kind = "declared";
+    if (S(r.dst_kind) === "table") kind = declared ? "declared" : "undeclared";
+    else if (dst === "adhoc") kind = "adhoc";
+    else kind = declared && observed ? "declared" : declared ? "unseen" : "undeclared";
+    return { from: S(r.src), to: dst, kind };
+  });
+  allEdges.forEach((e) => [e.from, e.to].forEach((id) => {
+    if (!nodes.has(id)) nodes.set(id, { id, kind: id.includes(".") ? "table" : "consumer", layer: id.includes(".") ? "table" : "consumer" });
+  }));
+
+  // the focus table's ancestors and descendants
+  const parents = new Map<string, string[]>(), children = new Map<string, string[]>();
+  allEdges.forEach((e) => {
+    (parents.get(e.to) ?? parents.set(e.to, []).get(e.to)!).push(e.from);
+    (children.get(e.from) ?? children.set(e.from, []).get(e.from)!).push(e.to);
+  });
+  const walk = (start: string, next: Map<string, string[]>) => {
+    const seen = new Set<string>(), stack = [start];
+    while (stack.length) {
+      const n = stack.pop()!;
+      (next.get(n) ?? []).forEach((m) => { if (!seen.has(m) && m !== start) { seen.add(m); stack.push(m); } });
+    }
+    return seen;
+  };
+  const f = nodes.has(focus) ? focus : "MARTS.OPS.FCT_TICKET_LINES";
+  const up = new Set<string>([f, ...walk(f, parents)]), down = new Set<string>([f, ...walk(f, children)]);
+  const keep = new Set<string>([...up, ...down]);
+  // only edges on a path through the focus: inside its upstream, or inside its downstream
+  const edges = allEdges.filter((e) => (up.has(e.from) && up.has(e.to)) || (down.has(e.from) && down.has(e.to)));
+
+  // columns: longest path from the roots of this subgraph; consumers line up in the last column
+  const layer = new Map<string, number>();
+  const depth = (id: string, guard: Set<string>): number => {
+    if (layer.has(id)) return layer.get(id)!;
+    if (guard.has(id)) return 0;
+    guard.add(id);
+    const ps = edges.filter((e) => e.to === id).map((e) => e.from);
+    const d = ps.length ? Math.max(...ps.map((p) => depth(p, guard))) + 1 : 0;
+    guard.delete(id);
+    layer.set(id, d);
+    return d;
+  };
+  keep.forEach((id) => depth(id, new Set()));
+  const maxTable = Math.max(0, ...[...keep].filter((id) => nodes.get(id)?.kind === "table").map((id) => layer.get(id) ?? 0));
+  keep.forEach((id) => { if (nodes.get(id)?.kind === "consumer") layer.set(id, maxTable + 1); });
+
+  const byCol: string[][] = [];
+  keep.forEach((id) => { (byCol[layer.get(id) ?? 0] ??= []).push(id); });
+  const pos = new Map<string, number>();
+  byCol.forEach((col, ci) => {
+    if (!col) return;
+    const score = (id: string) => {
+      const ps = edges.filter((e) => e.to === id && pos.has(e.from)).map((e) => pos.get(e.from)!);
+      return ps.length ? ps.reduce((a, b) => a + b, 0) / ps.length : 0;
+    };
+    col.sort((a, b) => (ci === 0 ? a.localeCompare(b) : score(a) - score(b) || a.localeCompare(b)));
+    col.forEach((id, i) => pos.set(id, i));
+  });
+
+  const gNodes: GNode[] = [];
+  byCol.forEach((col, ci) => (col ?? []).forEach((id) => {
+    const node = nodes.get(id)!;
+    gNodes.push({ id, col: ci, content: <LineageCard node={node} isFocus={id === f} open={open.includes(id)} onToggle={() => toggle(id)} onFocus={() => setFocus(id)} /> });
+  }));
+
+  const options = [...nodes.values()].sort((a, b) => (a.kind === b.kind ? a.id.localeCompare(b.id) : a.kind === "table" ? -1 : 1));
+  const undeclared = edges.filter((e) => e.kind === "undeclared").length;
+
+  return (
+    <div>
+      <Sub label="map · observed vs declared lineage" title="How the tables connect">
+        Pick a table or a dashboard: the map shows everything upstream that feeds it and everything downstream that reads it.
+        Solid lines are declared in dbt; pink dashed lines only show up in access_history (since 2026-01-01). Click a card for its details.
+      </Sub>
+      <div className="flex flex-wrap items-center gap-2" style={{ marginBottom: 16 }}>
+        {FOCUS_PRESETS.map(([id, label]) => (
+          <button key={id} onClick={() => setFocus(id)} style={{
+            fontFamily: FONTS.mono, fontSize: 11, letterSpacing: "0.05em", textTransform: "uppercase", padding: "5px 10px", cursor: "pointer",
+            border: `2px solid ${COLORS.ink}`, background: f === id ? COLORS.pink : COLORS.paper, color: COLORS.ink,
+            boxShadow: f === id ? "none" : `3px 3px 0 ${COLORS.ink}`, transform: f === id ? "translate(3px, 3px)" : "none",
+          }}>{label}</button>
+        ))}
+        <span style={{ flex: 1 }} />
+        <label style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em" }} htmlFor="focus-select">// any table</label>
+        <select id="focus-select" value={f} onChange={(e) => setFocus(e.target.value)} style={{ fontFamily: FONTS.mono, fontSize: 11, padding: "5px 8px", border: `2px solid ${COLORS.ink}`, background: COLORS.paper, color: COLORS.ink, maxWidth: 340 }}>
+          {options.map((n) => <option key={n.id} value={n.id}>{n.kind === "consumer" ? `◆ ${n.id}` : n.id}</option>)}
+        </select>
+      </div>
+      <div style={{ ...card(), padding: 14 }}>
+        {loading ? <Skeleton h={360} /> : error ? <Alert error={error} /> : (
+          <>
+            <div className="flex flex-wrap gap-2" style={{ marginBottom: 12, fontSize: 11 }}>
+              <Chip bg={COLORS.yellow}>{`${keep.size} nodes`}</Chip>
+              <Chip bg={COLORS.paper}>{`${edges.length} edges`}</Chip>
+              {undeclared > 0 && <Chip bg={COLORS.pink}>{`${undeclared} undeclared`}</Chip>}
+            </div>
+            <Graph nodes={gNodes} edges={edges} colWidth={170} colGap={56} />
+          </>
+        )}
+        <Legend items={[
+          { label: "declared in dbt", color: EDGE.declared.stroke, line: true },
+          { label: "observed, not declared", color: EDGE.undeclared.stroke, line: true, dash: EDGE.undeclared.dash },
+          { label: "declared exposure, no reads since 2026-01", color: EDGE.unseen.stroke, line: true, dash: EDGE.unseen.dash },
+          { label: "ad hoc analyst reads", color: EDGE.adhoc.stroke, line: true },
+        ]} />
+      </div>
+    </div>
+  );
+}
+
+// ---------- step 05: errors + dead ends ----------
+
+function StepErrors() {
   const marts = useSQLQuery(`
     WITH reads AS (
       SELECT DISTINCT unnest(json_extract_string(base_objects_accessed, '$[*].objectId'))::INTEGER AS table_id
@@ -240,17 +1063,17 @@ export default function ExerciseADive() {
     SELECT mart, read_outside_dbt, c.credits::DOUBLE AS build_credits, (100 * c.credits / tot.credits)::DOUBLE AS pct
     FROM m JOIN cost c USING (unique_id) CROSS JOIN tot ORDER BY read_outside_dbt, build_credits DESC
   `);
-
-  // A3b: queries that fail because they read a table that no longer exists.
   const failures = useSQLQuery(`
     SELECT query_tag, error_code, any_value(error_message) AS error_message, count(*) AS failed,
       strftime(min(start_time), '%Y-%m-%d') AS first_failure
     FROM ${T("query_history")} WHERE execution_status <> 'SUCCESS' GROUP BY ALL ORDER BY failed DESC
   `);
+  const failWeekly = useSQLQuery(`
+    SELECT strftime(date_trunc('week', start_time), '%Y-%m-%d') AS week, count(*) FILTER (WHERE execution_status <> 'SUCCESS') AS failed
+    FROM ${T("query_history")} WHERE query_tag IN (SELECT DISTINCT query_tag FROM ${T("query_history")} WHERE execution_status <> 'SUCCESS')
+    GROUP BY 1 ORDER BY 1
+  `);
 
-  const k = rowsOf(kpis)[0] ?? {};
-  const weeks = rowsOf(weekly).map((r) => ({ week: String(r.week), done: N(r.done_hour), stale: N(r.stale_pct) }));
-  const gapRows = rowsOf(gaps);
   const martRows = rowsOf(marts);
   const dead = martRows.filter((r) => !r.read_outside_dbt);
   const deadCredits = dead.reduce((s, r) => s + N(r.build_credits), 0);
@@ -259,139 +1082,107 @@ export default function ExerciseADive() {
   const failTotal = failRows.reduce((s, r) => s + N(r.failed), 0);
 
   return (
+    <div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-5" style={{ marginTop: 32 }}>
+        <Kpi loading={failures.isLoading} bg={COLORS.pink} value={fmt(failTotal)} label="failed queries" note="all against one dropped table" />
+        <Kpi loading={failures.isLoading} bg={COLORS.yellow} value={String(failRows.length)} label="broken readers" note="an app and a scheduled task" />
+        <Kpi loading={marts.isLoading} bg={COLORS.pinkSoft} value={`${dead.length}/${martRows.length}`} label="marts off the map" note="no reads outside dbt since 2026-01-01" />
+        <Kpi loading={marts.isLoading} value={fmt(deadCredits, 1)} label="credits for nobody" note={`${fmt(deadPct, 1)}% of transform_wh since 2026-01-01`} />
+      </div>
+
+      <Sub label="lost contact · errors" title="Queries hitting a dropped table">
+        RAW_POS.PUBLIC.TICKETS was replaced by RAW_POS_V2 on 2026-01-12 and dropped on 2026-02-16. Two readers never moved, and fail every day since.
+      </Sub>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div style={card()}>
+          <Label>failed queries per week</Label>
+          {failWeekly.isLoading ? <Skeleton h={200} /> : failWeekly.isError ? <Alert error={failWeekly.error} /> : (
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={rowsOf(failWeekly).map((r) => ({ week: S(r.week), failed: N(r.failed) }))} margin={{ top: 12, right: 8, bottom: 0, left: 0 }}>
+                <CartesianGrid strokeDasharray="2 4" stroke={COLORS.rule} vertical={false} />
+                <XAxis dataKey="week" tick={axisTick} axisLine={{ stroke: COLORS.ink, strokeWidth: 2 }} tickLine={false} tickFormatter={(w: string) => w.slice(0, 7)} minTickGap={48} />
+                <YAxis tick={axisTick} axisLine={false} tickLine={false} width={40} />
+                <Tooltip contentStyle={tooltipStyle} cursor={{ fill: COLORS.yellowSoft, fillOpacity: 0.5 }} formatter={(v: number) => [fmt(v), "failed queries"]} />
+                <Bar dataKey="failed" fill={COLORS.pink} stroke={COLORS.ink} strokeWidth={1.5} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+        <div style={card(COLORS.yellow)}>
+          <Label>who is failing</Label>
+          {failures.isLoading ? <Skeleton h={160} /> : failures.isError ? <Alert error={failures.error} /> : (
+            <>
+              {failRows.map((r) => (
+                <div key={S(r.query_tag)} style={{ borderTop: `1px solid ${COLORS.rule}`, paddingTop: 10, marginTop: 12 }}>
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span style={{ fontSize: 12, fontWeight: 600 }}>{S(r.query_tag)}</span>
+                    <Pixel text={fmt(N(r.failed))} size={24} />
+                  </div>
+                  <p style={{ fontSize: 10.5, color: COLORS.ink70, marginTop: 4 }}>since {S(r.first_failure)} · {S(r.error_code)}</p>
+                  <p style={{ fontSize: 10.5, color: COLORS.faint }}>{S(r.error_message)}</p>
+                </div>
+              ))}
+              <p style={{ fontSize: 11, marginTop: 14 }}>
+                Repoint these to <Mark>RAW_POS_V2.PUBLIC.TICKETS</Mark> (or the dbt staging model) before you migrate, or you migrate the failures too.
+              </p>
+            </>
+          )}
+        </div>
+      </div>
+
+      <Sub label="dark zone · dead ends" title="Built every night, read by nobody">
+        Marts that dbt builds every night but that no dashboard, app or analyst has read since 2026-01-01. Don't move these: ask, then switch them off.
+      </Sub>
+      <div style={card(COLORS.pinkSoft)}>
+        {marts.isLoading ? <Skeleton h={160} /> : marts.isError ? <Alert error={marts.error} /> : (
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead><tr><th style={th}>mart</th><th style={{ ...th, textAlign: "right" }}>credits since 2026-01</th><th style={{ ...th, textAlign: "right" }}>% of transform_wh</th></tr></thead>
+            <tbody>
+              {dead.map((r) => (
+                <tr key={S(r.mart)}>
+                  <td style={td}>{S(r.mart)}</td>
+                  <td style={num}>{fmt(N(r.build_credits), 2)}</td>
+                  <td style={num}>{fmt(N(r.pct), 2)}</td>
+                </tr>
+              ))}
+              <tr style={{ background: COLORS.pink }}>
+                <td style={{ ...td, borderTop: `2px solid ${COLORS.ink}`, textTransform: "uppercase", fontSize: 11 }}>total · don't move these</td>
+                <td style={{ ...num, borderTop: `2px solid ${COLORS.ink}` }}>{fmt(deadCredits, 2)}</td>
+                <td style={{ ...num, borderTop: `2px solid ${COLORS.ink}` }}>{fmt(deadPct, 1)}</td>
+              </tr>
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------- page ----------
+
+export default function ExerciseADive() {
+  const [rawStep, setStep] = useDiveState<number>("step", 0);
+  const step = Math.max(0, Math.min(STEPS.length - 1, N(rawStep)));
+  return (
     <main style={page}>
       <Hero
         eyebrow="exercise a · field notes"
         title={["What the warehouse", "does all day"]}
         tagline={<>Duckoffee's <Mark>snowflake</Mark> + dbt diary</>}
-        chips={["duckoffee", "2025-09-01 → 2026-03-31", "seven months"]}
+        chips={["duckoffee", "2025-09-01 → 2026-03-31", "five steps"]}
       >
-        Three questions, answered from query_history, access_history and the dbt artifacts: when does data land,
-        who reads what (and does dbt know), and what is built for nobody.
-        <br />Read the logs before you move a single table.
+        Read the logs before you move a single table. Five steps: what's in the logs, what happens over time,
+        who reads what, how the tables connect, and what breaks or is built for nobody.
       </Hero>
-
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-5" style={{ marginTop: 32 }}>
-        <Kpi loading={kpis.isLoading} bg={COLORS.pink} value={hhmm(N(k.done_after))} label="nightly build lands" note={`was ${hhmm(N(k.done_before))} until 2026-02-02`} />
-        <Kpi loading={kpis.isLoading} bg={COLORS.yellow} value={`${N(k.stale_pct).toFixed(0)}%`} label="stale morning reads" note="franchisee dashboard, 06:30–08:00" />
-        <Kpi loading={gaps.isLoading} value={String(gapRows.length)} label="undeclared reads" note="observed, not in dbt" />
-        <Kpi loading={marts.isLoading} bg={COLORS.pinkSoft} value={`${dead.length}/${martRows.length}`} label="marts off the map" note={`${deadCredits.toFixed(1)} credits · ${deadPct.toFixed(1)}% of transform_wh`} />
-      </div>
-      {kpis.isError && <Alert error={kpis.error} />}
-
-      <Section n="01" label="signal · loading patterns" title="The nightly build slipped past breakfast">
-        <div style={card()}>
-          {weekly.isLoading ? <Skeleton h={260} /> : weekly.isError ? <Alert error={weekly.error} /> : (
-            <ResponsiveContainer width="100%" height={260}>
-              <ComposedChart data={weeks} margin={{ top: 10, right: 8, bottom: 0, left: 0 }}>
-                <CartesianGrid strokeDasharray="2 4" stroke={COLORS.rule} vertical={false} />
-                <XAxis dataKey="week" tick={axisTick} axisLine={{ stroke: COLORS.ink, strokeWidth: 2 }} tickLine={false} tickFormatter={(w: string) => w.slice(0, 7)} minTickGap={48} />
-                <YAxis yAxisId="t" domain={[4, 9]} ticks={[4, 5, 6, 7, 8, 9]} tick={axisTick} axisLine={false} tickLine={false} tickFormatter={(v: number) => hhmm(v)} width={52} />
-                <YAxis yAxisId="p" orientation="right" domain={[0, 100]} tick={axisTick} axisLine={false} tickLine={false} tickFormatter={(v: number) => `${v}%`} width={44} />
-                <Tooltip
-                  contentStyle={tooltipStyle} labelStyle={{ color: COLORS.ink70 }} cursor={{ fill: COLORS.yellowSoft, fillOpacity: 0.5 }}
-                  formatter={(v: number, name: string) => (name === "done" ? [hhmm(v), "build done (avg)"] : [`${v.toFixed(1)}%`, "stale morning reads"])}
-                />
-                <Bar yAxisId="p" dataKey="stale" fill={COLORS.pink} stroke={COLORS.ink} strokeWidth={1.5} />
-                <ReferenceLine yAxisId="t" y={6.5} stroke={COLORS.ink} strokeDasharray="6 4" strokeWidth={1.5} label={{ value: "06:30 · franchisees open the dashboard", position: "insideTopLeft", fill: COLORS.ink, fontSize: 11, fontFamily: FONTS.mono }} />
-                <Line yAxisId="t" type="linear" dataKey="done" stroke={COLORS.ink} strokeWidth={3} dot={false} />
-              </ComposedChart>
-            </ResponsiveContainer>
-          )}
-          <div className="flex flex-wrap gap-6" style={{ fontSize: 11, marginTop: 10 }}>
-            <span className="flex items-center gap-2"><span style={{ display: "inline-block", width: 18, height: 3, background: COLORS.ink }} /> nightly dbt build done (weekly avg)</span>
-            <span className="flex items-center gap-2"><span style={{ display: "inline-block", width: 10, height: 10, background: COLORS.pink, border: `1.5px solid ${COLORS.ink}` }} /> % of morning reads before the build finished</span>
-          </div>
-        </div>
-
-        <div style={{ ...card(COLORS.yellow), marginTop: 28 }}>
-          <div className="flex items-center gap-2"><Label>suspect</Label><Chip bg={COLORS.ink} fg={COLORS.paper}>fct_ticket_lines</Chip></div>
-          {culprit.isLoading ? <Skeleton h={48} /> : culprit.isError ? <Alert error={culprit.error} /> : (
-            <div className="grid grid-cols-2 gap-6" style={{ marginTop: 12 }}>
-              {rowsOf(culprit).map((r, i) => (
-                <div key={String(r.period)}>
-                  <Chip bg={i ? COLORS.pink : COLORS.yellowSoft}>{String(r.period)}</Chip>
-                  <div style={{ marginTop: 10 }}><Pixel text={`${N(r.minutes).toFixed(0)} min · ${N(r.million_rows).toFixed(1)}M rows/run`} size={28} /></div>
-                </div>
-              ))}
-            </div>
-          )}
-          <p style={{ fontSize: 11, color: COLORS.ink70, marginTop: 12 }}>
-            The is_incremental filter broke: every night is a full rebuild, while full_refresh stays false.
-          </p>
-        </div>
+      <Stepper step={step} setStep={setStep} />
+      <Section n={STEPS[step].n} label={STEPS[step].sub} title={STEPS[step].title}>
+        {step === 0 && <StepLogs />}
+        {step === 1 && <StepTime />}
+        {step === 2 && <StepReaders />}
+        {step === 3 && <StepLineage />}
+        {step === 4 && <StepErrors />}
       </Section>
-
-      <Section n="02" label="recon · lineage" title="Reads nobody declared">
-        <p style={{ fontSize: 12, color: COLORS.ink70, marginBottom: 14 }}>
-          Observed in access_history since 2026-01-01, missing from dbt_models.depends_on_nodes or dbt_exposures.
-        </p>
-        <div style={{ ...card(), padding: 0 }}>
-          {gaps.isLoading ? <div style={{ padding: 16 }}><Skeleton h={200} /></div> : gaps.isError ? <div style={{ padding: 16 }}><Alert error={gaps.error} /></div> : (
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead><tr><th style={th}>reader</th><th style={th}>reads table</th><th style={{ ...th, textAlign: "right" }}>reads</th></tr></thead>
-              <tbody>
-                {gapRows.map((r, i) => {
-                  const gone = String(r.object_name).startsWith("RAW_POS.PUBLIC.TICKETS");
-                  return (
-                    <tr key={i}>
-                      <td style={td}><span style={{ color: COLORS.faint }}>{String(r.reader_type)} · </span>{String(r.reader)}</td>
-                      <td style={td}>{gone ? <Mark bg={COLORS.pink}>{String(r.object_name)}</Mark> : String(r.object_name)}</td>
-                      <td style={num}>{N(r.reads).toLocaleString()}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </Section>
-
-      <Section n="03" label="dark zone · dead ends" title="Built for nobody, read but gone">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div style={card(COLORS.pinkSoft)}>
-            <Label>marts with no reads outside dbt</Label>
-            {marts.isLoading ? <Skeleton h={160} /> : marts.isError ? <Alert error={marts.error} /> : (
-              <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 10 }}>
-                <thead><tr><th style={th}>mart</th><th style={{ ...th, textAlign: "right" }}>credits</th><th style={{ ...th, textAlign: "right" }}>% wh</th></tr></thead>
-                <tbody>
-                  {dead.map((r) => (
-                    <tr key={String(r.mart)}>
-                      <td style={td}>{String(r.mart)}</td>
-                      <td style={num}>{N(r.build_credits).toFixed(2)}</td>
-                      <td style={num}>{N(r.pct).toFixed(2)}</td>
-                    </tr>
-                  ))}
-                  <tr style={{ background: COLORS.pink }}>
-                    <td style={{ ...td, borderTop: `2px solid ${COLORS.ink}`, textTransform: "uppercase", fontSize: 11 }}>total · don't move these</td>
-                    <td style={{ ...num, borderTop: `2px solid ${COLORS.ink}` }}>{deadCredits.toFixed(2)}</td>
-                    <td style={{ ...num, borderTop: `2px solid ${COLORS.ink}` }}>{deadPct.toFixed(1)}</td>
-                  </tr>
-                </tbody>
-              </table>
-            )}
-          </div>
-          <div style={card(COLORS.yellow)}>
-            <Label>queries hitting a dropped table</Label>
-            {failures.isLoading ? <Skeleton h={160} /> : failures.isError ? <Alert error={failures.error} /> : (
-              <>
-                <div style={{ margin: "14px 0 10px" }}><Pixel text={failTotal.toLocaleString()} size={60} /></div>
-                <Chip bg={COLORS.pink}>failed queries · lost contact</Chip>
-                {failRows.map((r) => (
-                  <div key={String(r.query_tag)} style={{ borderTop: `1px solid ${COLORS.rule}`, paddingTop: 8, marginTop: 12 }}>
-                    <p style={{ fontSize: 12 }}>{String(r.query_tag)} <span style={{ color: COLORS.ink70 }}>· {N(r.failed).toLocaleString()} since {String(r.first_failure)}</span></p>
-                    <p style={{ fontSize: 11, color: COLORS.faint }}>{String(r.error_code)} · {String(r.error_message)}</p>
-                  </div>
-                ))}
-                <p style={{ fontSize: 11, color: COLORS.ink70, marginTop: 12 }}>
-                  <Mark>RAW_POS.PUBLIC.TICKETS</Mark> replaced by RAW_POS_V2 on 2026-01-12, dropped 2026-02-16.
-                </p>
-              </>
-            )}
-          </div>
-        </div>
-      </Section>
-
+      <StepNav step={step} setStep={setStep} />
       <Footer />
     </main>
   );
